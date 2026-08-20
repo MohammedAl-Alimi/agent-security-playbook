@@ -24,5 +24,10 @@ Run through this for **every** new HTTP-reachable unit. Server actions count —
 - [ ] Errors return generic message + request ID; details go to structured logs only ([09](../rules/09-logging-and-errors.md))
 - [ ] Catch blocks fail closed ([09](../rules/09-logging-and-errors.md))
 
+## Caching
+- [ ] Personalized/authenticated response → `Cache-Control: private, no-store`; only allowlisted identical-for-everyone routes are cacheable ([16](../rules/16-caching-cdn.md))
+- [ ] Any `unstable_cache`/`use cache`/Redis entry holding user data has the user/tenant ID in its key ([16](../rules/16-caching-cdn.md))
+- [ ] No auth/entitlement decision is cached ([16](../rules/16-caching-cdn.md))
+
 ## Verification
 - [ ] Endpoint added to the 401/403 table-driven security test in the same PR ([15](../rules/15-testing-verification.md))

@@ -17,6 +17,7 @@ The final gate before production.
 - [ ] Error pages leak nothing: trigger a 500 in prod mode, confirm generic message + request ID only ([09](../rules/09-logging-and-errors.md))
 - [ ] Payments: fulfillment only via verified webhook; test-mode keys nowhere near prod ([12](../rules/12-payments.md))
 - [ ] Rate limits active on auth, email, LLM, payment routes — verify a burst actually 429s ([07](../rules/07-rate-limiting.md))
+- [ ] Caching verified on the deployed URL: authenticated routes never `x-vercel-cache: HIT` and send `no-store`; two-user isolation test green ([16](../rules/16-caching-cdn.md))
 
 ## Platform
 - [ ] Debug/preview endpoints and deployment previews protected or disabled
