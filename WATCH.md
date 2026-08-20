@@ -12,6 +12,7 @@ A daily-updated log of new vulnerabilities, breaches, and research affecting AI-
 - New, verified findings are **appended** to the log below, each with a source URL.
 - A finding that should change one of the [rule chapters](rules/) is flagged with **⚠ PROPOSED RULE UPDATE** and the chapter number, for human review — the agent never edits the chapters itself.
 - If nothing new and verifiable turns up, only the **Last checked** line above is updated.
+- The routine that maintains this file follows the [Agent Routines Playbook](https://github.com/MohammedAl-Alimi/agent-routines-playbook) (security-advisory-watch recipe).
 
 ---
 
