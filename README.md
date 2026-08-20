@@ -21,7 +21,38 @@
 
 **Defense-in-depth security rules that AI coding agents can follow, and verify.**
 
-Point any AI coding agent (Claude Code, Cursor, Copilot, etc.) at this repo and say *"follow the instructions here to secure my app"* (or *"...to build this feature securely"*), and it will apply a research-backed, testable rule set instead of shipping the happy path.
+Point any AI coding agent (Claude Code, Cursor, Copilot, etc.) at this repo, and it will apply a research-backed, testable rule set instead of shipping the happy path.
+
+---
+
+## 🚀 Quick start
+
+### 1. With an AI agent (the main way)
+
+Paste this into Claude Code, Cursor, or any coding agent, inside your project:
+
+```text
+Read https://github.com/MohammedAl-Alimi/agent-security-playbook
+and follow AGENT-INSTRUCTIONS.md to audit this project for security issues.
+```
+
+or, when building something new:
+
+```text
+Read https://github.com/MohammedAl-Alimi/agent-security-playbook
+and follow AGENT-INSTRUCTIONS.md while you build <your feature> securely.
+```
+
+The agent reads [`AGENT-INSTRUCTIONS.md`](AGENT-INSTRUCTIONS.md), maps your trust boundaries, applies the [15 rule chapters](#the-rules), and wires up tests that fail if a rule ever regresses.
+
+### 2. As a permanent project default
+
+Copy [`templates/CLAUDE-security.md`](templates/CLAUDE-security.md) into your project's `CLAUDE.md` (or `AGENTS.md`). Every future AI session then starts with all 22 core rules already loaded, and there's no need to point at this repo again.
+
+### 3. As a human
+
+Read [`PLAYBOOK.md`](PLAYBOOK.md) for the threat model, then keep the [checklists](checklists/) next to your code review:
+[new feature](checklists/new-feature.md) · [new endpoint](checklists/new-endpoint.md) · [pre-deploy](checklists/pre-deploy.md)
 
 ---
 
@@ -73,18 +104,6 @@ Everything is generic-first: examples use Next.js / Supabase / Clerk / Stripe be
 | 13 | [🤖 SSRF & LLM Apps](rules/13-ssrf-and-llm.md) | Never fetch a user- or model-supplied URL raw; LLM output is untrusted input. |
 | 14 | [📦 Supply Chain](rules/14-supply-chain.md) | Verify every package exists before installing; pin, lock, scan. |
 | 15 | [✅ Self-Verification](rules/15-testing-verification.md) | Security regressions must turn CI red: negative tests for every rule. |
-
----
-
-## How to use it
-
-**With an AI agent**: point it at this repo with a prompt like
-
-> Read https://github.com/MohammedAl-Alimi/agent-security-playbook and follow AGENT-INSTRUCTIONS.md to audit this project / build this feature.
-
-**As a project default**: copy [`templates/CLAUDE-security.md`](templates/CLAUDE-security.md) into your project's `CLAUDE.md` (or `AGENTS.md`), so every future session starts with the rules loaded.
-
-**As a human**: read [`PLAYBOOK.md`](PLAYBOOK.md) for the threat model, then keep the [checklists](checklists/) next to your code review.
 
 ---
 
