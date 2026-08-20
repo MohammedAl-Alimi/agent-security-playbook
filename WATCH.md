@@ -20,3 +20,8 @@ A daily-updated log of new vulnerabilities, breaches, and research affecting AI-
 ### 2026-08-20 — baseline
 
 - Repo launched. The founding research corpus (CVEs, breach postmortems, and studies through this date) lives in [`research/security_and_replication_findings.md`](research/security_and_replication_findings.md).
+
+### 2026-08-20
+
+- **isolated-vm sandbox escape (GHSA-864f-rcv7-6rh4):** A critical type-confusion bug in `ExternalCopy`'s `transferList` handling lets untrusted JavaScript running inside an isolate corrupt host memory for a full guest-to-host escape; all versions ≤ 7.0.0 are affected, patched in 6.2.0 and 7.0.1. Matters for AI-built apps because agent frameworks and code-execution tools commonly run model-generated or user-supplied JS inside isolated-vm, so an escape turns that sandbox into host RCE. [Endor Labs advisory](https://www.endorlabs.com/learn/ghsa-864f-rcv7-6rh4-critical-type-confusion-vulnerability-in-isolated-vm)
+  - ⚠ PROPOSED RULE UPDATE (chapter 13): note that JS sandboxes used to run LLM/agent-generated code (e.g. isolated-vm) are escapable and must be patched and treated as defense-in-depth, not a trust boundary.
