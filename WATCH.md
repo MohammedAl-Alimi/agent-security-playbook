@@ -2,7 +2,7 @@
 
 A daily-updated log of new vulnerabilities, breaches, and research affecting AI-generated ("vibe-coded") applications. Maintained by a scheduled Claude cloud agent; every entry is verified against a primary source before it lands here.
 
-**Last checked:** 2026-08-20 — baseline established at repo launch.
+**Last checked:** 2026-08-20 — check in progress.
 
 ---
 
