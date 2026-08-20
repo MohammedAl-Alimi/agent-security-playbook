@@ -34,12 +34,13 @@ These rules are mandatory for all code in this project. Full patterns: [agent-se
 15. Rate limit auth, email, LLM, and payment routes with a global store (not in-memory), keyed on `userId ?? ip`, failing closed.
 16. Never fetch a user- or model-supplied URL without the SSRF validator (scheme allowlist, private-IP block, redirects off).
 17. Uploads: magic-byte type check, server-side size cap, randomized keys, private buckets + signed URLs.
+18. Caching: authenticated/personalized responses are `Cache-Control: private, no-store`; any server-side cache entry holding user data includes the user/tenant ID in its key; never cache an authorization or entitlement decision.
 
 ### Hygiene
-18. Errors to clients: generic message + request ID only. Catch blocks around security checks fail closed. Structured logs with PII/secret redaction; never interpolate raw user input into log strings.
-19. Nothing secret ever carries a client env prefix (`NEXT_PUBLIC_`, `VITE_`). gitleaks runs pre-commit and in CI.
-20. Verify every new dependency on the registry before installing (LLM-hallucinated names get typosquatted). Commit lockfiles; CI installs frozen.
+19. Errors to clients: generic message + request ID only. Catch blocks around security checks fail closed. Structured logs with PII/secret redaction; never interpolate raw user input into log strings.
+20. Nothing secret ever carries a client env prefix (`NEXT_PUBLIC_`, `VITE_`). gitleaks runs pre-commit and in CI.
+21. Verify every new dependency on the registry before installing (LLM-hallucinated names get typosquatted). Commit lockfiles; CI installs frozen.
 
 ### Meta
-21. Never weaken a security control (disable RLS, `USING (true)`, CORS `*`, comment out auth) to fix a bug — flag for human approval instead.
-22. Every new endpoint is added to the 401/unauthenticated + cross-tenant negative test table in the same PR. Security tests red = merge blocked.
+22. Never weaken a security control (disable RLS, `USING (true)`, CORS `*`, comment out auth) to fix a bug — flag for human approval instead.
+23. Every new endpoint is added to the 401/unauthenticated + cross-tenant negative test table in the same PR. Security tests red = merge blocked.
