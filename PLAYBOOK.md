@@ -34,7 +34,7 @@ Every chapter defends a layer; an attacker has to get through all of them. A mis
 
 | Layer | Chapter(s) | Backstop for |
 |---|---|---|
-| Edge (WAF, bots, limits) | [07](rules/07-rate-limiting.md), [10](rules/10-headers-csp-cors.md) | volumetric abuse, injection blast radius |
+| Edge (WAF, bots, limits, cache) | [07](rules/07-rate-limiting.md), [10](rules/10-headers-csp-cors.md), [16](rules/16-caching-cdn.md) | volumetric abuse, injection blast radius, cross-user cache leaks |
 | Transport & headers | [10](rules/10-headers-csp-cors.md) | XSS, clickjacking, CSRF |
 | Identity | [01](rules/01-authentication.md), [06](rules/06-hashing-and-tokens.md) | stolen creds, forged sessions |
 | Authorization | [02](rules/02-authorization.md) | IDOR, privilege escalation |
