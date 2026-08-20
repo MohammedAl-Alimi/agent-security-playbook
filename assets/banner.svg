@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" role="img" aria-label="Agent Security Playbook — defense-in-depth rules for AI-generated applications">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#111a2e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="0.5" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="240" rx="12" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="1199" height="239" rx="12" fill="none" stroke="#233149" stroke-width="1"/>
+  <!-- shield mark -->
+  <g transform="translate(70,58)">
+    <path d="M62 0 L124 22 V64 C124 104 98 132 62 148 C26 132 0 104 0 64 V22 Z" fill="none" stroke="url(#accent)" stroke-width="5"/>
+    <path d="M36 74 L56 94 L92 50" fill="none" stroke="url(#accent)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="240" y="112" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="52" font-weight="800" fill="#e8eefc">Agent Security Playbook</text>
+  <text x="242" y="156" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="21" fill="#9db1d3">Defense-in-depth rules any AI coding agent can follow — and verify.</text>
+  <text x="242" y="192" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="15" fill="#5eead4">15 rule chapters · checklists · drop-in CLAUDE.md · self-verification tests</text>
+</svg>
