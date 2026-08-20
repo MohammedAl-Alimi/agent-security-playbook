@@ -80,6 +80,7 @@ Reminders don't fix omission. **Structure does.** Every rule in this playbook is
 4. **[A drop-in rules file](templates/CLAUDE-security.md)**: paste into your project's `CLAUDE.md` / `AGENTS.md` so every future session inherits the rules.
 5. **[Checklists](checklists/)**: new feature, new endpoint, pre-deploy.
 6. **[The research corpus](research/security_and_replication_findings.md)**: every CVE, incident, study, and exemplar repo the rules are built on.
+7. **[AI Security Watch](WATCH.md)**: a daily-updated, agent-maintained log of new incidents and CVEs affecting AI-built apps.
 
 Everything is generic-first: examples use Next.js / Supabase / Clerk / Stripe because they're common, but the patterns apply to any stack.
 
