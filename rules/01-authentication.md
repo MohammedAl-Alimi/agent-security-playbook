@@ -10,6 +10,7 @@ Verify who is calling in **every** entry point — not just at the front door. M
 4. Store sessions in `httpOnly; secure; sameSite` cookies — never in localStorage or any JS-readable storage.
 5. Return identical errors and comparable timing on login and password-reset whether or not the account exists.
 6. Ship MFA hooks from day one: step-up verification on sensitive actions, backup codes stored hashed.
+7. Treat RSC flight payloads as attacker-controlled input; framework security patches (React2Shell class) are same-week deploys, enforced by a recurring CI version gate.
 
 ## Rule 1 — Auth check in every handler, action, and DAL function
 
@@ -146,3 +147,20 @@ if (SENSITIVE_ACTIONS.has(action) && sessionClaims?.mfaVerifiedAt == null) {
 Use the provider's built-ins where they exist (Clerk: TOTP/SMS/backup codes; Supabase Auth: MFA API). If custom: TOTP secrets encrypted at rest, backup codes stored **hashed** like passwords — see [hashing & tokens](06-hashing-and-tokens.md). Never accept an MFA flag from the request body ([authorization](02-authorization.md), mass assignment).
 
 **Verify:** test invokes a sensitive action with a valid but non-MFA session → denied with `mfa_required`; grep input schemas for `mfa|verified` fields accepted from clients → zero.
+
+## Rule 7 — RSC payloads are attacker input; framework patches deploy same week
+
+**Why:** React2Shell (CVE-2025-55182, CVSS 10.0) was unauthenticated RCE in React Server Components' flight deserialization — a default `create-next-app` build was vulnerable via `react-server-dom-*`, paired with Next.js CVE-2025-66478, and exploited in the wild within days of the December 2025 disclosure. The durable lessons: the RSC wire format is attacker-controlled serialized input your server deserializes *before any of your code runs*, so no handler-level check compensates — and version pinning (Rule 2) only protects you if security releases actually reach production.
+
+```jsonc
+// ❌ WRONG — floating on whatever the scaffold resolved; patch never scheduled
+"react": "19.0.0", "react-dom": "19.0.0"          // vulnerable line
+
+// ✅ RIGHT — at or above the fixed release for each line, deployed the week it shipped
+"react": ">=19.2.1", "react-dom": ">=19.2.1"      // fixed floors: 19.0.1 / 19.1.2 / 19.2.1
+// react-server-dom-webpack|turbopack|parcel: same floors; next: CVE-2025-66478 patch
+```
+
+Standing policy: a framework security release (React, Next.js, auth SDK) is a same-week production deploy, and a **recurring** CI job re-runs the lockfile gate ([15 — Self-Verification](./15-testing-verification.md) Rule 7) so an advisory published between PRs still turns the pipeline red. Vercel's WAF rules for React2Shell were a stopgap only — upgrade regardless.
+
+**Verify:** lockfile shows react/react-dom/react-server-dom-* at ≥ 19.0.1/19.1.2/19.2.1 per line and a patched Next.js; the version-gate workflow has a `schedule:` trigger, not just `pull_request`.

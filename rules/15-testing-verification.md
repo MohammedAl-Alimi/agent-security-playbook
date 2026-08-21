@@ -13,6 +13,7 @@ Every rule in this playbook exists as a test or CI gate that FAILS on regression
 7. Gate CI on secret scanning (gitleaks) and SAST (Semgrep + repo-local rules).
 8. The contract: the security regression suite runs on every PR, red = merge blocked, no bypass label.
 9. When adding a feature, an AI agent extends the suite first (routes → manifest, tables → pgTAP, incidents → Semgrep rules) and runs it before claiming done.
+10. CI lockfile gate fails on react/react-dom/react-server-dom-* below 19.0.1/19.1.2/19.2.1 or unpatched Next.js — and re-runs on a weekly schedule, not only on PRs.
 
 ## Rule 1 — Why tests, not vigilance
 
@@ -137,6 +138,26 @@ When an AI agent adds a feature, the suite is part of the feature — extend it 
 6. Run `npm run test:security` (and `supabase test db` if migrations changed) and paste the passing output in the PR. If any item is skipped, say so explicitly — silence is the failure mode.
 
 **Verify:** PR template contains this checklist; branch protection lists `security-regression` as required; `git log` shows no merge commits with the job red.
+
+## Rule 7 — Lockfile version gate for known-RCE framework lines
+
+React2Shell (CVE-2025-55182, CVSS 10.0 unauthenticated RCE in RSC flight deserialization) plus Next.js CVE-2025-66478 made the *default* create-next-app build remotely exploitable, with in-the-wild exploitation within days. Only a lockfile-level floor catches the vulnerable transitive `react-server-dom-*` copy that a later upgrade or dedupe quietly reintroduces — and only a scheduled run catches an advisory published when no PR is open.
+
+```yaml
+# ✅ RIGHT — version-gate job runs on PRs AND a weekly schedule
+on:
+  pull_request: {}
+  schedule: [{ cron: "0 6 * * 1" }]
+# gate step parses the lockfile and fails on any of:
+#   react / react-dom / react-server-dom-{webpack,turbopack,parcel}
+#     < 19.0.1 (19.0.x line) / < 19.1.2 (19.1.x) / < 19.2.1 (19.2.x)
+#   next below the CVE-2025-66478-patched release for its line
+#   next < 15.2.3 / @clerk/nextjs < 6.39.2 (the ch01 Rule 2 floors)
+```
+
+A red weekly run has an owner: it triggers the same-week-deploy policy in [01 — Authentication](./01-authentication.md) Rule 7.
+
+**Verify:** pin `react-server-dom-webpack@19.0.0` on a test branch → the gate job fails; the workflow file contains a `schedule:` trigger for this job.
 
 ---
 
