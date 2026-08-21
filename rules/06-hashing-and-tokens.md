@@ -12,6 +12,7 @@ Every credential is either hashed, encrypted, or a breach waiting for a database
 6. Prefer revocable server-side sessions over JWTs for user auth; either way the token rides an httpOnly cookie.
 7. Encrypt (don't hash) data you must read back: AES-256-GCM, unique IV per encryption, key from env/KMS.
 8. Rehash on login whenever stored params are below current policy.
+9. Supabase JWTs: verify against the project JWKS with an RS256/ES256 allowlist — never a copied shared secret; rotate via standby keys.
 
 ## Rule 1 — Argon2id (or bcrypt) server-side; nothing else
 
@@ -202,3 +203,23 @@ if (ok && argon2.needsRehash(user.passwordHash, CURRENT_PARAMS)) {
 Python: `ok, new_hash = pwd.verify_and_update(password, stored)` — persist `new_hash` when non-null.
 
 **Verify:** test seeds a user with a legacy hash (e.g. bcrypt cost 8), logs in successfully → stored hash now matches current policy (`$argon2id$` with current params) and login still works on the second attempt.
+
+## Rule 9 — Supabase asymmetric JWT keys: verify via JWKS, never a copied secret
+
+**Why:** Since October 2025, new Supabase projects sign JWTs with asymmetric keys (RS256/ES256) by default. The legacy pattern — pasting the shared HS256 JWT secret into every backend that verifies tokens — made each of those services a signing oracle: leak any one env file and the attacker forges tokens for the whole project. With asymmetric keys, services verify against the public JWKS and hold no signing material at all.
+
+```python
+# ❌ WRONG — shared secret copied into a second service; algorithm not pinned
+payload = jwt.decode(token, SUPABASE_JWT_SECRET)
+
+# ✅ RIGHT — FastAPI verifies against the project JWKS, algorithms pinned by you (Rule 5)
+from jwt import PyJWKClient
+jwks = PyJWKClient("https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json")
+key = jwks.get_signing_key_from_jwt(token)
+payload = jwt.decode(token, key.key, algorithms=["ES256", "RS256"],  # allowlist, never header
+                     audience="authenticated")
+```
+
+Node: `jose`'s `createRemoteJWKSet` with the same pinned `algorithms`. Rotation is built in — create a **standby key**, wait for JWKS caches to pick it up, then promote it: old tokens stay valid until expiry and no service redeploys or re-copies anything.
+
+**Verify:** grep every service's env/config for the legacy shared JWT secret → zero hits outside Supabase itself; test feeds an HS256 token signed with a guessed secret → 401.
