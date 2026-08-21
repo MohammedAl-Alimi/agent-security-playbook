@@ -42,6 +42,7 @@ Every chapter defends a layer; an attacker has to get through all of them. A mis
 | Data | [04](rules/04-database-rls.md) | every app-layer omission above |
 | Side effects | [08](rules/08-webhooks.md), [11](rules/11-file-uploads.md), [12](rules/12-payments.md), [13](rules/13-ssrf-and-llm.md) | forged events, hostile files, forged URLs |
 | Secrets & supply chain | [05](rules/05-secrets-and-env.md), [14](rules/14-supply-chain.md) | leaks, malicious packages |
+| Client data | [17](rules/17-client-data-protection.md) | PII in git, logs, URLs, LLM prompts, dev copies |
 | Observability | [09](rules/09-logging-and-errors.md) | detection, forensics |
 | Verification | [15](rules/15-testing-verification.md) | regression of all of the above |
 
