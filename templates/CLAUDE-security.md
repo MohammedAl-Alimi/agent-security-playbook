@@ -36,11 +36,16 @@ These rules are mandatory for all code in this project. Full patterns: [agent-se
 17. Uploads: magic-byte type check, server-side size cap, randomized keys, private buckets + signed URLs.
 18. Caching: authenticated/personalized responses are `Cache-Control: private, no-store`; any server-side cache entry holding user data includes the user/tenant ID in its key; never cache an authorization or entitlement decision.
 
+### Client data
+19. Production/client data never enters the repo: fixtures and seeds use Faker-generated or export-time-anonymized data; data-shaped artifacts (`*.csv`, `*.sqlite*`, `*.dump`, `*.log`, `data/`) are gitignored, and notebooks are output-stripped (nbstripout).
+20. PII never goes in logs (do-not-log list enforced by logger redaction), URLs, localStorage, client bundles, error-tracker events (`sendDefaultPii` off + scrubber), or LLM prompts (minimize + pseudonymize first).
+21. Prod data stays in prod: dev/staging/CI use anonymized dumps; retention is a scheduled deletion job; deletion requests fan out to every third party holding copies.
+
 ### Hygiene
-19. Errors to clients: generic message + request ID only. Catch blocks around security checks fail closed. Structured logs with PII/secret redaction; never interpolate raw user input into log strings.
-20. Nothing secret ever carries a client env prefix (`NEXT_PUBLIC_`, `VITE_`). gitleaks runs pre-commit and in CI.
-21. Verify every new dependency on the registry before installing (LLM-hallucinated names get typosquatted). Commit lockfiles; CI installs frozen.
+22. Errors to clients: generic message + request ID only. Catch blocks around security checks fail closed. Structured logs with PII/secret redaction; never interpolate raw user input into log strings.
+23. Nothing secret ever carries a client env prefix (`NEXT_PUBLIC_`, `VITE_`). gitleaks runs pre-commit and in CI.
+24. Verify every new dependency on the registry before installing (LLM-hallucinated names get typosquatted). Commit lockfiles; CI installs frozen.
 
 ### Meta
-22. Never weaken a security control (disable RLS, `USING (true)`, CORS `*`, comment out auth) to fix a bug — flag for human approval instead.
-23. Every new endpoint is added to the 401/unauthenticated + cross-tenant negative test table in the same PR. Security tests red = merge blocked.
+25. Never weaken a security control (disable RLS, `USING (true)`, CORS `*`, comment out auth) to fix a bug — flag for human approval instead.
+26. Every new endpoint is added to the 401/unauthenticated + cross-tenant negative test table in the same PR. Security tests red = merge blocked.

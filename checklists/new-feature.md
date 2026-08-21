@@ -24,6 +24,13 @@ Before marking any feature complete.
 - [ ] No fetch of user- or LLM-supplied URLs without the SSRF validator ([13](../rules/13-ssrf-and-llm.md))
 - [ ] LLM output schema-validated before use; never rendered as raw HTML ([13](../rules/13-ssrf-and-llm.md))
 
+## Client data (if the feature touches PII)
+- [ ] No production/client data in fixtures, seeds, notebooks, or the repo at all — Faker or anonymized exports only ([17](../rules/17-client-data-protection.md))
+- [ ] New log lines checked against the do-not-log list; PII fields covered by logger redaction paths ([17](../rules/17-client-data-protection.md))
+- [ ] No identifiers in new URLs; no PII in localStorage or client bundle ([17](../rules/17-client-data-protection.md))
+- [ ] LLM calls send task-necessary, pseudonymized fields only ([17](../rules/17-client-data-protection.md))
+- [ ] New PII columns: retention decided, encryption considered, added to the subprocessor/deletion map ([17](../rules/17-client-data-protection.md))
+
 ## Dependencies
 - [ ] Every new package verified on the registry before install; lockfile committed ([14](../rules/14-supply-chain.md))
 

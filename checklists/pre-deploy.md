@@ -10,6 +10,7 @@ The final gate before production.
 - [ ] RLS linter (e.g. splinter) reports no tables without RLS ([04](../rules/04-database-rls.md))
 
 ## Manual sweeps
+- [ ] Canary sweep: no real customer data in the repo (fixtures/seeds/notebooks), staging DB, CI logs, or client bundle; error-tracker `sendDefaultPii` off ([17](../rules/17-client-data-protection.md))
 - [ ] Grep for landmines: `dangerouslySetInnerHTML`, `USING (true)`, `Access-Control-Allow-Origin: *`, `Math.random()` near tokens, `service_role` outside server-only modules
 - [ ] Prod env vars set for **all** validated keys — a missing one must fail boot, verify it does ([05](../rules/05-secrets-and-env.md))
 - [ ] Security headers live: CSP, HSTS, frame-ancestors, nosniff — check the actual deployed response ([10](../rules/10-headers-csp-cors.md))
