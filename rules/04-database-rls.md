@@ -14,6 +14,7 @@ The database enforces tenancy itself: RLS on every table from the migration that
 8. DB constraints (UNIQUE, CHECK, FK, NOT NULL) are the final integrity layer; check-then-insert is forbidden.
 9. Counters/credits/quotas mutate in one atomic `UPDATE ... WHERE balance >= $x RETURNING` — never read-modify-write.
 10. Test RLS in CI: `tests.rls_enabled('public')` + per-table pgTAP via `supabase test db`, splinter lints build-breaking.
+11. Soft delete is a security state: every policy/view filters `deleted_at IS NULL`, user deletion revokes sessions in the same operation, uniqueness uses partial indexes, and secrets are hard-deleted — never soft-deleted.
 
 ## Rule 1 — RLS in the same migration as CREATE TABLE
 
@@ -187,6 +188,27 @@ select * from finish(); rollback;
 ```
 
 **Verify:** `supabase test db` runs on every migration PR; splinter Security Advisor lints (`rls_disabled_in_public`, `policy_exists_rls_disabled`, `security_definer_view`, `auth_users_exposed`, `function_search_path_mutable`, `rls_references_user_metadata`) run in CI as build-breaking.
+
+## Rule 11 — Soft delete without resurrection
+
+A `deleted_at` column the policies don't know about means "deleted" rows keep flowing into every query and view — and a soft-deleted *user* whose sessions survive is an account that keeps working after the admin removed it.
+
+```sql
+-- ❌ WRONG — policy ignores deletion; unique index blocks re-signup against a dead row
+create policy docs_select on public.documents for select
+  using (owner_id = (select auth.uid()::text));
+create unique index users_email_idx on public.users (email);
+
+-- ✅ RIGHT — deletion is part of every predicate; uniqueness only among the living
+create policy docs_select on public.documents for select to authenticated
+  using (owner_id = (select auth.uid()::text) and deleted_at is null);
+create unique index users_email_live_idx on public.users (email)
+  where deleted_at is null;
+```
+
+Deleting a user revokes their sessions and refresh tokens **in the same operation** (same transaction, or the immediately-following provider call) — never a later cleanup job. Secrets rows (API keys, OAuth tokens, TOTP seeds) are hard-deleted or crypto-shredded, never soft-deleted: a "deleted" credential in a dump is still a live credential. Restore is a privileged, audited transition — a service-role admin path with an audit row, not an UPDATE any client can reach.
+
+**Verify:** pgTAP — soft-delete a row, SELECT as its owner → empty; delete a test user, replay their session cookie → 401; grep every policy and view on soft-delete tables for `deleted_at` → no predicate misses it.
 
 ---
 
