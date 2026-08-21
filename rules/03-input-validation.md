@@ -12,6 +12,7 @@ Parse, don't validate: every external input crosses a strict schema at the trust
 6. Validate env at boot: t3-env in `next.config.ts` / pydantic-settings at module import — a missing var is a build/boot failure.
 7. Keep one shared schema module; derive variants with `.pick()/.omit()/.extend()` — no duplicated client/server schemas.
 8. Client-side validation is UX only; the server re-parses everything.
+9. Bound the request before parsing it: body-size caps ahead of `req.json()`, schema-bounded pagination (`max(100)`), and no hand-written backtracking regex (ReDoS).
 
 ## Rule 1 — Parse at every trust boundary
 
@@ -152,6 +153,31 @@ export const TaskPatch  = TaskCreate.partial();
 `<form>` validation, React state checks, and disabled buttons are advisory: every Server Action is a public POST endpoint, and curl skips your form. The server-side parse from Rule 1 is the control; the client copy (same shared schema, via react-hook-form etc.) exists to give fast feedback. Validation failures return 400/422 with field-level issues only (`z.flattenError`) — never echo submitted values, stacks, or schema internals.
 
 **Verify:** an integration test invokes each mutation directly with curl/`fetch` (no browser) using an invalid body → 400/422 whose body contains no submitted values or stack frames.
+
+## Rule 9 — Resource-bound the parse itself
+
+Schema validation runs *after* the body is read — a 500 MB JSON payload or a catastrophically backtracking regex exhausts the function before `.parse()` ever executes (OWASP Denial of Service Cheat Sheet). Bound size, cardinality, and regex behavior at the same boundary the schema guards.
+
+```ts
+// ❌ WRONG — unbounded body, unbounded page size, backtracking regex
+const body = await req.json();
+const Q = z.object({ limit: z.coerce.number() });        // ?limit=1000000 → full table scan
+const emailRe = /^([a-zA-Z0-9]+)+@/;                     // ReDoS on 'aaaaaaaaaaaa!'
+
+// ✅ RIGHT — cap bytes before parsing; bound pagination in the schema; built-ins over regex
+const text = await req.text();
+if (text.length > 100_000) return new Response('Payload too large', { status: 413 });
+const input = TaskCreate.parse(JSON.parse(text));
+const Page = z.strictObject({
+  limit: z.string().min(1).pipe(z.coerce.number().int().min(1).max(100)).default('20'),
+  cursor: z.uuid().optional(),
+});
+// every string field carries .max(N); formats via z.email()/z.uuid(), never hand regex
+```
+
+FastAPI: enforce a max `Content-Length` in middleware or at the proxy, and `Field(ge=1, le=100)` on pagination params. Any hand-written regex that must exist over user input gets a ReDoS linter (e.g. recheck) in CI — but Zod/Pydantic built-in formats are already safe, so mostly: don't write them.
+
+**Verify:** test posts a body over the cap → 413 before any DB/LLM work; `?limit=100000` → 400; the ReDoS linter runs in CI over `src/`.
 
 ---
 
