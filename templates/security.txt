@@ -1,0 +1,19 @@
+# security.txt template — RFC 9116 (https://www.rfc-editor.org/info/rfc9116/)
+# Serve at: https://{{DOMAIN}}/.well-known/security.txt
+# Replace every {{placeholder}}; remove these comment lines before publishing.
+#
+# Disclosure policy (publish the filled-in version of this paragraph at {{POLICY_URL}}):
+# We welcome good-faith security research on {{DOMAIN}}. Report vulnerabilities to
+# {{SECURITY_EMAIL}} and we will acknowledge receipt within {{ACK_DAYS}} business days
+# and keep you informed until resolution. Do not access, modify, or exfiltrate data
+# beyond the minimum needed to demonstrate the issue; do not run denial-of-service,
+# social-engineering, or physical attacks; and give us {{DISCLOSURE_DAYS}} days to
+# remediate before public disclosure. We will not pursue legal action against
+# research conducted under this policy.
+
+Contact: mailto:{{SECURITY_EMAIL}}
+Contact: {{SECURITY_CONTACT_URL}}
+Expires: {{EXPIRES_ISO8601}}
+Preferred-Languages: {{LANGUAGES}}
+Canonical: https://{{DOMAIN}}/.well-known/security.txt
+Policy: {{POLICY_URL}}
