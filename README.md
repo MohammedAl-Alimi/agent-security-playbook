@@ -5,7 +5,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-5eead4.svg"></a>
   <img alt="Works with any AI agent" src="https://img.shields.io/badge/works%20with-any%20AI%20agent-a78bfa.svg">
-  <img alt="17 rule chapters" src="https://img.shields.io/badge/rules-17%20chapters-38bdf8.svg">
+  <img alt="25 rule chapters" src="https://img.shields.io/badge/rules-25%20chapters-38bdf8.svg">
 </p>
 
 <p align="center">
@@ -43,11 +43,11 @@ Read https://github.com/MohammedAl-Alimi/agent-security-playbook
 and follow AGENT-INSTRUCTIONS.md while you build <your feature> securely.
 ```
 
-The agent reads [`AGENT-INSTRUCTIONS.md`](AGENT-INSTRUCTIONS.md), maps your trust boundaries, applies the [17 rule chapters](#the-rules), and wires up tests that fail if a rule ever regresses.
+The agent reads [`AGENT-INSTRUCTIONS.md`](AGENT-INSTRUCTIONS.md), maps your trust boundaries, applies the [25 rule chapters](#the-rules), and wires up tests that fail if a rule ever regresses.
 
 ### 2. As a permanent project default
 
-Copy [`templates/CLAUDE-security.md`](templates/CLAUDE-security.md) into your project's `CLAUDE.md` (or `AGENTS.md`). Every future AI session then starts with all 26 core rules already loaded, and there's no need to point at this repo again.
+Copy [`templates/CLAUDE-security.md`](templates/CLAUDE-security.md) into your project's `CLAUDE.md` (or `AGENTS.md`). Every future AI session then starts with all 35 core rules already loaded, and there's no need to point at this repo again.
 
 ### 3. As a human
 
@@ -74,7 +74,7 @@ Reminders don't fix omission. **Structure does.** Every rule in this playbook is
 
 ## What you get
 
-1. **[17 rule chapters](rules/)**: concrete DO/DON'T patterns for every layer, each rule with a ❌/✅ code pair and a **Verify** step.
+1. **[25 rule chapters](rules/)**: concrete DO/DON'T patterns for every layer, each rule with a ❌/✅ code pair and a **Verify** step.
 2. **[Agent instructions](AGENT-INSTRUCTIONS.md)**: the executable entry point, with what an agent does step by step to build or audit securely.
 3. **[The playbook](PLAYBOOK.md)**: the threat model and reasoning behind the rules.
 4. **[A drop-in rules file](templates/CLAUDE-security.md)**: paste into your project's `CLAUDE.md` / `AGENTS.md` so every future session inherits the rules.
@@ -107,6 +107,14 @@ Everything is generic-first: examples use Next.js / Supabase / Clerk / Stripe be
 | 15 | [✅ Self-Verification](rules/15-testing-verification.md) | Security regressions must turn CI red: negative tests for every rule. |
 | 16 | [🗃️ Caching & CDN](rules/16-caching-cdn.md) | Personalized responses are never shared-cacheable; cache keys include the user. |
 | 17 | [🧬 Client Data Protection](rules/17-client-data-protection.md) | Client data never enters git, logs, URLs, LLM prompts, or dev copies unmasked. |
+| 18 | [🧼 Output Encoding & XSS](rules/18-output-encoding-xss.md) | No raw-HTML sinks on user data; one sanctioned sanitizer; URL scheme allowlists. |
+| 19 | [⚖️ Business Logic](rules/19-business-logic.md) | Multi-step flows are server-side state machines; one-shot semantics via UNIQUE constraints. |
+| 20 | [🎫 OAuth & Account Lifecycle](rules/20-oauth-account-lifecycle.md) | PKCE + exact redirect URIs; link accounts by immutable sub, never email. |
+| 21 | [🕸️ Agents, MCP & RAG](rules/21-agent-mcp-rag.md) | Never combine private data + untrusted content + egress; retrieval runs as the user. |
+| 22 | [🚨 Detection & Incident Response](rules/22-detection-incident-response.md) | Page-worthy alerts, canary tokens, tested offsite backups, a real runbook. |
+| 23 | [✉️ Email, SMS & Notifications](rules/23-email-sms-notifications.md) | DMARC enforced; header injection blocked; email change is an ATO surface. |
+| 24 | [📡 Realtime Channels](rules/24-realtime-channels.md) | Authenticate the WS upgrade; Realtime channels private by default; exact-origin postMessage. |
+| 25 | [🏗️ Deployment & Infrastructure](rules/25-deployment-infrastructure.md) | Protected previews, env separation with boot assertions, hardened containers, DNS hygiene. |
 
 ---
 
