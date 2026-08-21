@@ -31,6 +31,14 @@ Before marking any feature complete.
 - [ ] LLM calls send task-necessary, pseudonymized fields only ([17](../rules/17-client-data-protection.md))
 - [ ] New PII columns: retention decided, encryption considered, added to the subprocessor/deletion map ([17](../rules/17-client-data-protection.md))
 
+## Business logic (if the feature has flows, credits, or promotions)
+- [ ] Multi-step flows modeled as a server-side state machine advanced in one transaction; derived values recomputed server-side ([19](../rules/19-business-logic.md))
+- [ ] One-shot things (trials, coupons, invites) enforced by UNIQUE constraints and covered by a parallel-request race test ([19](../rules/19-business-logic.md))
+
+## Agents & AI (if the feature ships or consumes agents/MCP/RAG)
+- [ ] No agent context combines private-data reads + untrusted content + egress; MCP servers verified, pinned, single-scoped-credential ([21](../rules/21-agent-mcp-rag.md))
+- [ ] RAG retrieval runs as the requesting user; vector store under RLS/tenant filters ([21](../rules/21-agent-mcp-rag.md))
+
 ## Dependencies
 - [ ] Every new package verified on the registry before install; lockfile committed ([14](../rules/14-supply-chain.md))
 

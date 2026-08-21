@@ -20,7 +20,11 @@ The final gate before production.
 - [ ] Rate limits active on auth, email, LLM, payment routes — verify a burst actually 429s ([07](../rules/07-rate-limiting.md))
 - [ ] Caching verified on the deployed URL: authenticated routes never `x-vercel-cache: HIT` and send `no-store`; two-user isolation test green ([16](../rules/16-caching-cdn.md))
 
-## Platform
+## Platform & operations
+- [ ] Deployment protection on preview URLs verified (unauthenticated fetch hits the auth interstitial) ([25](../rules/25-deployment-infrastructure.md))
+- [ ] Boot assertion confirms prod isn't running test keys or dev project refs ([25](../rules/25-deployment-infrastructure.md))
+- [ ] DMARC record present on the sending domain (`dig TXT _dmarc.<domain>`) ([23](../rules/23-email-sms-notifications.md))
+- [ ] Security alerts + canary tokens live; incident runbook filled in and reachable ([22](../rules/22-detection-incident-response.md))
 - [ ] Debug/preview endpoints and deployment previews protected or disabled
 - [ ] Monitoring wired: security events (`authn_login_fail`, `authz_fail`, `rate_limit_exceeded`) visible in logs ([09](../rules/09-logging-and-errors.md))
 - [ ] Rollback path known and tested
