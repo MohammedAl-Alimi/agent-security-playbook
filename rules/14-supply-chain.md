@@ -12,6 +12,11 @@ Every dependency, lifecycle script, and CI action is code you run with your cred
 6. Pin every GitHub Action to a full 40-char commit SHA with a version comment.
 7. Run SAST in CI: CodeQL (free on public repos) or Semgrep CE with framework rulesets, blocking on findings.
 8. Review dependency-update diffs for typosquats and maintainer changes — a familiar-looking name is not verification.
+9. Treat MCP servers as dependencies that hold credentials: vendor-verified sources, pinned versions, one scoped credential per server.
+10. Publish via npm trusted publishing (OIDC) with provenance; FIDO-only 2FA; no long-lived registry tokens.
+11. Generate a CycloneDX SBOM (Syft/Trivy) on every release; re-scan stored SBOMs on advisory days.
+12. Self-host browser scripts by default; any cross-origin `<script>` carries SRI `integrity` + `crossorigin`; tag managers never on payment pages.
+13. Ban dangerous sinks with a repo-local Semgrep pack: pickle/`yaml.load`/eval/`Function()`, recursive merges, shell-string exec, `Template(user_string)`.
 
 ## Rule 1 — Verify before install: slopsquatting is an active attack
 
@@ -154,6 +159,84 @@ Keep a repo-local `.semgrep/` directory: every incident and review finding becom
 ```
 
 **Verify:** CODEOWNERS routes `package.json`, lockfiles, and `.github/workflows/**` to a designated reviewer; branch protection requires that review before merge.
+
+## Rule 9 — MCP servers are dependencies with credentials
+
+**Why:** September 2025's `postmark-mcp` npm package was the first confirmed malicious MCP server in the wild: version 1.0.16 added one line that BCC'd every email it sent to the author's domain. An MCP server is a dependency that *also* holds live credentials and sits inside an agent loop — every rule in this chapter applies, plus credential scoping.
+
+```text
+❌ WRONG — npm install <some-mcp-server>; paste in the same API key the app uses
+✅ RIGHT — install only vendor-verified registry entries; pin the exact version
+   (Rule 2) with a release-age cooldown; ONE scoped, revocable credential per
+   server; review every version bump's diff like Rule 8
+```
+
+Full consumption rules — tool-description hashing, rug-pull re-approval, toxic-flow server combinations — live in [21 — Agent, MCP & RAG](21-agent-mcp-rag.md).
+
+**Verify:** an in-repo inventory maps every configured MCP server → pinned version + its dedicated credential; grep MCP/agent config for app-level keys (service-role, live Stripe, primary API keys) → zero.
+
+## Rule 10 — Publishing side: trusted publishing, FIDO 2FA, provenance
+
+**Why:** Shai-Hulud 2.0 (November 2025) proved the credential-stealing worm recurs — stolen maintainer tokens still publish malware at ecosystem scale, and the September 2025 'qix' compromise started with a phished 2FA code. npm trusted publishing (OIDC from CI) removes the stored token entirely; FIDO-only 2FA removes the phishable factor.
+
+```yaml
+# ❌ WRONG — long-lived automation token sits in repo secrets forever
+- run: npm publish        # NODE_AUTH_TOKEN=npm_xxx
+
+# ✅ RIGHT — OIDC trusted publishing; provenance attestation attached
+permissions: { id-token: write, contents: read }
+- run: npm publish --provenance   # no token anywhere; registry verifies the CI identity
+```
+
+Where a token is unavoidable: granular, short-lived, single-package. As a consumer, prefer packages with provenance and check them (`npm audit signatures`).
+
+**Verify:** repo secrets contain no `NPM_TOKEN`/`NODE_AUTH_TOKEN`; maintainer accounts enforce FIDO-only 2FA; the latest published version shows a provenance badge on npmjs.com.
+
+## Rule 11 — SBOM on every release
+
+**Why:** When the next Shai-Hulud lands, the question is "do we ship the compromised version anywhere?" — answerable in minutes from stored SBOMs, or in days of dependency archaeology without them. The EU Cyber Resilience Act's reporting obligations begin September 2026, making the artifact a compliance requirement too.
+
+```yaml
+# ✅ RIGHT — release workflow step
+- run: syft . -o cyclonedx-json > sbom.cdx.json   # or: trivy sbom --format cyclonedx .
+# attach sbom.cdx.json to the release artifacts
+```
+
+On advisory days, scan the *stored* SBOMs (`trivy sbom sbom.cdx.json`) for each supported release instead of re-resolving trees from source.
+
+**Verify:** the latest release's artifacts include `sbom.cdx.json`; a scheduled CI job scans stored SBOMs against fresh advisories.
+
+## Rule 12 — Browser-loaded scripts: self-host, SRI, no GTM on payment pages
+
+**Why:** polyfill.io (2024): a trusted CDN domain changed owners and began serving malware to 100k+ sites — nothing in those sites' repos changed. A third-party `<script src>` is a dependency that updates itself outside your lockfile.
+
+```html
+<!-- ❌ WRONG — remote code, no integrity, auto-updates under someone else's control -->
+<script src="https://cdn.example.com/widget/latest.js"></script>
+
+<!-- ✅ RIGHT — self-host/bundle by default; if truly external: exact version + SRI -->
+<script src="https://cdn.example.com/widget/2.4.1.js"
+        integrity="sha384-..." crossorigin="anonymous"></script>
+```
+
+Tag managers are production code deployed by whoever holds the container login: review container changes like PRs, and keep GTM **off payment pages entirely** — PCI DSS 4.0 §6.4.3 requires justification and integrity assurance for every payment-page script.
+
+**Verify:** CI grep for cross-origin `<script src=` without `integrity=` → zero; payment routes render no tag-manager snippet.
+
+## Rule 13 — Dangerous-sink Semgrep pack
+
+**Why:** ASVS V15's lesson: a perfectly validated *string* still detonates in the wrong sink — deserializers, code eval, recursive merges, shells, template engines. These are mechanical patterns, which is exactly what the repo-local `.semgrep/` directory (Rule 7) exists for.
+
+```text
+✅ RIGHT — .semgrep/dangerous-sinks.yml bans, on external data:
+- pickle.loads / yaml.load (yaml.safe_load only) / eval / new Function()
+- hand-rolled recursive merges (prototype pollution): strip __proto__/constructor/
+  prototype at the Zod/Pydantic boundary; run node with --disable-proto=delete
+- child_process.exec / shell=True: execFile/spawn with array args, shell=False only
+- Template(user_string) and any user-string-built template (SSTI)
+```
+
+**Verify:** seeding `yaml.load(request.data)` or `new Function(body.code)` on a test branch fails the SAST job (Rule 7).
 
 ---
 
