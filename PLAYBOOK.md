@@ -36,15 +36,23 @@ Every chapter defends a layer; an attacker has to get through all of them. A mis
 |---|---|---|
 | Edge (WAF, bots, limits, cache) | [07](rules/07-rate-limiting.md), [10](rules/10-headers-csp-cors.md), [16](rules/16-caching-cdn.md) | volumetric abuse, injection blast radius, cross-user cache leaks |
 | Transport & headers | [10](rules/10-headers-csp-cors.md) | XSS, clickjacking, CSRF |
-| Identity | [01](rules/01-authentication.md), [06](rules/06-hashing-and-tokens.md) | stolen creds, forged sessions |
+| Identity | [01](rules/01-authentication.md), [06](rules/06-hashing-and-tokens.md), [20](rules/20-oauth-account-lifecycle.md) | stolen creds, forged sessions, account takeover |
 | Authorization | [02](rules/02-authorization.md) | IDOR, privilege escalation |
 | Input | [03](rules/03-input-validation.md) | mass assignment, injection |
+| Output & rendering | [18](rules/18-output-encoding-xss.md) | XSS through user, third-party, and LLM data |
+| Business logic | [19](rules/19-business-logic.md) | workflow bypass, promo/trial abuse |
 | Data | [04](rules/04-database-rls.md) | every app-layer omission above |
-| Side effects | [08](rules/08-webhooks.md), [11](rules/11-file-uploads.md), [12](rules/12-payments.md), [13](rules/13-ssrf-and-llm.md) | forged events, hostile files, forged URLs |
+| Side effects | [08](rules/08-webhooks.md), [11](rules/11-file-uploads.md), [12](rules/12-payments.md), [13](rules/13-ssrf-and-llm.md), [23](rules/23-email-sms-notifications.md), [24](rules/24-realtime-channels.md) | forged events, hostile files, forged URLs, spoofed email, hijacked channels |
+| Agents & AI | [13](rules/13-ssrf-and-llm.md), [21](rules/21-agent-mcp-rag.md) | prompt injection, tool abuse, RAG leaks, memory poisoning |
 | Secrets & supply chain | [05](rules/05-secrets-and-env.md), [14](rules/14-supply-chain.md) | leaks, malicious packages |
 | Client data | [17](rules/17-client-data-protection.md) | PII in git, logs, URLs, LLM prompts, dev copies |
-| Observability | [09](rules/09-logging-and-errors.md) | detection, forensics |
+| Platform | [25](rules/25-deployment-infrastructure.md) | preview exposure, environment bleed, container/DNS weaknesses |
+| Observability & response | [09](rules/09-logging-and-errors.md), [22](rules/22-detection-incident-response.md) | detection, forensics, recovery |
 | Verification | [15](rules/15-testing-verification.md) | regression of all of the above |
+
+### OWASP Top 10:2025 map
+
+The 2025 Top 10 reshuffled categories; the layer map already covers the moves: [14 — Supply Chain](rules/14-supply-chain.md) addresses A03:2025 (Software Supply Chain Failures, now its own category); the fail-closed rules in [07](rules/07-rate-limiting.md) and [09](rules/09-logging-and-errors.md) address A10:2025 (Mishandling of Exceptional Conditions); and SSRF ([13](rules/13-ssrf-and-llm.md)) is no longer standalone — it merged into Broken Access Control.
 
 ## 4. Rule design principles
 
