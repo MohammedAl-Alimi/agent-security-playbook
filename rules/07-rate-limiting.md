@@ -12,6 +12,7 @@ Every expensive or mutating route gets a globally-consistent, identity-keyed, fa
 6. Layer platform (WAF rules, BotID/Turnstile) over app-level limits — neither replaces the other.
 7. Mutating endpoints accept an `Idempotency-Key` deduped via a DB UNIQUE constraint.
 8. Return 429 with a `Retry-After` header derived from the limiter's reset time.
+9. LLM endpoints are metered, not just rate-limited: input-token caps, `maxOutputTokens`, tool-call iteration ceilings, and a per-user daily spend budget checked before streaming.
 
 ## Rule 1 — Global store, never in-memory
 
@@ -165,6 +166,33 @@ return new Response("Too many requests", {
 Log each trip as a structured `rate_limit_exceeded` event (key, route, requestId) — it's your credential-stuffing alarm.
 
 **Verify:** curl the limit → response is status 429 AND has a numeric `Retry-After` header; log stream shows the structured event.
+
+## Rule 9 — LLM endpoints: cap tokens, iterations, and daily spend
+
+**Why:** A requests-per-minute limit does not bound cost when a single request can carry 200K input tokens, stream unbounded output, or loop an agent through dozens of tool calls (OWASP LLM10, unbounded consumption). Meter all four axes, before the provider call.
+
+```ts
+// ❌ WRONG — rate-limited, but each request is still unbounded
+const { success } = await llmLimiter.limit(userId);
+const result = streamText({ model, messages });   // any size in, any size out, any loop
+
+// ✅ RIGHT — bound every axis before streaming starts
+if (countTokens(messages) > MAX_INPUT_TOKENS)
+  return new Response('Prompt too large', { status: 413 });
+const spent = await getDailySpend(userId);        // atomic counter — ch. 04 Rule 9 shape
+if (spent >= DAILY_BUDGET_USD)
+  return new Response('Daily budget exceeded', { status: 429 });
+const result = streamText({
+  model, messages,
+  maxOutputTokens: 2048,
+  stopWhen: stepCountIs(5),                       // tool-call iteration ceiling
+});
+// after completion: record actual usage back into the daily counter
+```
+
+Budgets are keyed per user, never only globally — one abuser must not exhaust the app's monthly credit for everyone (see [13 — SSRF & LLM](13-ssrf-and-llm.md) for prompt-side rules).
+
+**Verify:** tests — oversized prompt → 413; a user over their daily budget → 429; a fixture tool that always requests another step stops at the iteration ceiling.
 
 ---
 
