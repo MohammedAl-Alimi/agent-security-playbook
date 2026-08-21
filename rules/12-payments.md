@@ -12,6 +12,7 @@ Money state lives at the provider and in webhook-written tables; the client neve
 6. Handle the subscription lifecycle: `canceled`/`past_due`/payment-failed events revoke access, not just grant it.
 7. Credits/quotas decrement in one atomic `UPDATE ... WHERE balance >= x RETURNING` — never SELECT-then-UPDATE.
 8. Test-mode and live-mode keys never mix: separate env sets per environment, validated at boot.
+9. Order math is server-owned: quantity is `z.number().int().positive().max(CAP)`, every derived number is recomputed server-side, currency is fixed by the Price ID, and a Postgres CHECK mirrors the bounds.
 
 ## Rule 1 — Fulfillment via webhook, never the redirect
 
@@ -151,6 +152,33 @@ STRIPE_SECRET_KEY: z.string().refine(
 Webhook endpoints and secrets are also per-mode — a live endpoint must reject test-mode events (`event.livemode === false` in production → log and 2xx without side effects).
 
 **Verify:** build with `sk_test_` in the production env set → build/boot fails; unit test feeds a `livemode: false` event to the prod handler → no fulfillment.
+
+## Rule 9 — Order math: bounded quantities, recomputed totals
+
+Quantity manipulation is the classic business-logic flaw (CWE-840, PortSwigger's logic-flaw labs): `-1` yields a negative total the flow happily "refunds", `0.5` breaks integer credit math, `2^31` overflows counters or reserves your entire inventory. Rule 4 fixed the *price*; this fixes everything multiplied by it.
+
+```ts
+// ❌ WRONG — client's quantity and total pass straight through
+const { quantity, total } = await req.json();
+await stripe.checkout.sessions.create({ line_items: [{ price: PRICES[plan], quantity }] });
+
+// ✅ RIGHT — bounded integer quantity; server recomputes every derived number
+const Order = z.strictObject({
+  plan: z.enum(['starter', 'pro']),
+  quantity: z.number().int().positive().max(MAX_QTY),   // e.g. 999
+});
+const { plan, quantity } = Order.parse(await req.json());
+// subtotal/tax/discount/total computed HERE from the server-side price — any client
+// copy is rejected by strictObject; currency is fixed by the Stripe Price ID (Rule 4),
+// so no currency field exists in any inbound schema
+```
+
+```sql
+-- ✅ mirror in the database (04 — Rule 8): holds against every future code path
+alter table order_items add constraint qty_bounds check (quantity > 0 and quantity <= 999);
+```
+
+**Verify:** tests post quantity ∈ {-1, 0, 0.5, 2147483648} → all 400; a body carrying `total`/`subtotal`/`currency` → 400; direct insert with quantity 0 → constraint violation.
 
 ---
 
