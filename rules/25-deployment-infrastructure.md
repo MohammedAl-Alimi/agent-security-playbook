@@ -148,7 +148,7 @@ assert not (IS_PROD and settings.DEBUG), "DEBUG=True in production"
 
 Next.js: don't set `productionBrowserSourceMaps: true` unless sources are meant to be public, and never expose server source maps. Seed/debug routes (`/api/seed`, `/api/debug`) must be excluded from prod builds, not merely hidden. Log files are never web-reachable: nothing under the served root writes `*.log`, and log/debug viewer routes (`/logs`, `/debug/log`) don't exist in prod — logs go to the platform's log drain, not to files an URL can reach.
 
-**Verify:** pre-deploy check — `curl -s -o /dev/null -w '%{http_code}' https://$HOST/docs /openapi.json /_next/static/**/*.map /logs /app.log /debug.log` → 401/404 for each; grep for `debug=True`/`DEBUG=true` in prod config → zero; grep for file-writing log transports targeting the public/static directory → zero.
+**Verify:** pre-deploy check — `curl -s -o /dev/null -w '%{http_code}' https://$HOST/docs /openapi.json /_next/static/**/*.map /logs /app.log /debug.log /.env /.env.production /.git/config` → 401/404 for each; grep for `debug=True`/`DEBUG=true` in prod config → zero; grep for file-writing log transports targeting the public/static directory → zero.
 
 ## Rule 7 — TLS for self-hosted: Mozilla intermediate, ACME, testssl.sh
 
