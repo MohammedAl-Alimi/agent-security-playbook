@@ -11,6 +11,7 @@ Verify who is calling in **every** entry point — not just at the front door. M
 5. Return identical errors and comparable timing on login and password-reset whether or not the account exists.
 6. Ship MFA hooks from day one: step-up verification on sensitive actions, backup codes stored hashed.
 7. Treat RSC flight payloads as attacker-controlled input; framework security patches (React2Shell class) are same-week deploys, enforced by a recurring CI version gate.
+8. No default or seeded credentials anywhere: no `admin/admin`, no shared demo password in prod, no unchanged service defaults — seeded accounts get per-environment random secrets or don't exist in prod.
 
 ## Rule 1 — Auth check in every handler, action, and DAL function
 
@@ -164,3 +165,21 @@ Use the provider's built-ins where they exist (Clerk: TOTP/SMS/backup codes; Sup
 Standing policy: a framework security release (React, Next.js, auth SDK) is a same-week production deploy, and a **recurring** CI job re-runs the lockfile gate ([15 — Self-Verification](./15-testing-verification.md) Rule 7) so an advisory published between PRs still turns the pipeline red. Vercel's WAF rules for React2Shell were a stopgap only — upgrade regardless.
 
 **Verify:** lockfile shows react/react-dom/react-server-dom-* at ≥ 19.0.1/19.1.2/19.2.1 per line and a patched Next.js; the version-gate workflow has a `schedule:` trigger, not just `pull_request`.
+
+## Rule 8 — No default or seeded credentials
+
+**Why:** AI-generated seed scripts love `admin@example.com / password123`, and those accounts ship to production because nothing fails when they do. Default credentials are a top breach entry point across every industry report — and the vibe-coded variant is worse, because the same well-known seed password appears in thousands of generated apps and in the repo itself. The same applies to infrastructure defaults: a Postgres/Redis/Grafana container left on its default password is an open door.
+
+```ts
+// ❌ WRONG — fixed credentials in a seed script that can run anywhere
+await createUser({ email: 'admin@example.com', password: 'admin123', role: 'admin' });
+
+// ✅ RIGHT — seeding is dev-only and secrets are generated, never written down
+if (env.ENV === 'production') throw new Error('seed script must not run in prod');
+const password = crypto.randomBytes(24).toString('base64url');   // printed once, or use invite flow
+await createUser({ email: 'admin@example.com', password, role: 'admin' });
+```
+
+Prod admin access comes from a real invite/signup flow (with MFA, Rule 6) — never a pre-created account. Self-hosted services (DBs, dashboards, queues) get their default credentials changed at provision time, enforced by the boot assertion pattern from [deployment](25-deployment-infrastructure.md).
+
+**Verify:** grep seeds/fixtures/docker-compose for hardcoded passwords → only dev-guarded, generated ones; a prod smoke test attempts login with the seed email + known seed password → rejected; boot assertion fails prod if a seeded demo account exists with a password set.
