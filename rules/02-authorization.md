@@ -11,6 +11,7 @@ Knowing *who* is calling ([authentication](01-authentication.md)) says nothing a
 5. Every tenant-owned table carries a non-null `tenant_id`, filtered in app queries AND enforced by RLS as backstop.
 6. Deny by default: no matching policy, thrown error, or missing role → denied, never allowed.
 7. Any diff that widens permissions requires explicit human approval — never a debugging tactic.
+8. Admin surfaces are role-gated at every layer — an unlinked URL, hidden nav item, or obscure path is not protection.
 
 ## Rule 1 — Authentication ≠ authorization
 
@@ -164,3 +165,24 @@ ALTER TABLE documents DISABLE ROW LEVEL SECURITY;
 ```
 
 **Verify:** CI grep on the diff for `USING (true)`, `DISABLE ROW LEVEL SECURITY`, `service_role`, removed `auth(`/`can(` lines → any hit blocks merge pending a human-approval label.
+
+## Rule 8 — Admin surfaces: hidden is not protected
+
+**Why:** AI-generated admin pages routinely rely on obscurity — the dashboard isn't linked anywhere, so no check gets written. But every route in the bundle is enumerable (client route manifests, source maps, guessing `/admin`), and `/api/admin/*` endpoints are just URLs. The pattern also appears as "the UI hides the button": the delete-user button only renders for admins, while the server action it calls checks nothing.
+
+```ts
+// ❌ WRONG — page hidden from nav, API trusts the page
+// app/admin/page.tsx renders only if user.role === 'admin' (client-side)
+// app/api/admin/users/route.ts: export async function DELETE() { ... }  // no check
+
+// ✅ RIGHT — every admin entry point checks the role itself
+export async function DELETE(req: Request) {
+  const user = await requireUser();
+  if (!can(user, 'admin:manage_users')) return new Response(null, { status: 404 });
+  ...
+}
+```
+
+Layer it: the admin layout checks server-side (UX), every admin route handler/action checks again (the boundary, [ch01](01-authentication.md) Rule 1), admin-only mutations run through `can()` (Rule 3), and admin-only data is denied by RLS to non-admin roles (backstop, [ch04](04-database-rls.md)). Prefer 404 over 403 so the surface's existence isn't confirmed. Third-party admin tools (DB GUIs, queue dashboards, feature-flag consoles) sit behind SSO/deployment protection ([ch25](25-deployment-infrastructure.md)), never on an unauthenticated URL.
+
+**Verify:** the ch15 route-table test includes every `/admin` and `/api/admin` route asserting non-admin → 404/403; grep admin handlers for a `can(`/role check in the handler body → no hits missing.
