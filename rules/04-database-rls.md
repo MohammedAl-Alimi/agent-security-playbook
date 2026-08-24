@@ -15,6 +15,7 @@ The database enforces tenancy itself: RLS on every table from the migration that
 9. Counters/credits/quotas mutate in one atomic `UPDATE ... WHERE balance >= $x RETURNING` — never read-modify-write.
 10. Test RLS in CI: `tests.rls_enabled('public')` + per-table pgTAP via `supabase test db`, splinter lints build-breaking.
 11. Soft delete is a security state: every policy/view filters `deleted_at IS NULL`, user deletion revokes sessions in the same operation, uniqueness uses partial indexes, and secrets are hard-deleted — never soft-deleted.
+12. Injection applies beyond SQL: query filters accept schema-validated scalars, never raw request objects — NoSQL operator injection (`{"$gt":""}`) and `$`-prefixed keys die at the boundary.
 
 ## Rule 1 — RLS in the same migration as CREATE TABLE
 
@@ -209,6 +210,23 @@ create unique index users_email_live_idx on public.users (email)
 Deleting a user revokes their sessions and refresh tokens **in the same operation** (same transaction, or the immediately-following provider call) — never a later cleanup job. Secrets rows (API keys, OAuth tokens, TOTP seeds) are hard-deleted or crypto-shredded, never soft-deleted: a "deleted" credential in a dump is still a live credential. Restore is a privileged, audited transition — a service-role admin path with an audit row, not an UPDATE any client can reach.
 
 **Verify:** pgTAP — soft-delete a row, SELECT as its owner → empty; delete a test user, replay their session cookie → 401; grep every policy and view on soft-delete tables for `deleted_at` → no predicate misses it.
+
+## Rule 12 — Operator injection: filters take scalars, not request objects
+
+**Why:** the NoSQL twin of string-built SQL. MongoDB-style stores interpret objects in filters: `db.users.findOne({ email, password })` with a JSON body of `{"email":{"$gt":""},"password":{"$gt":""}}` matches the first user — authentication bypassed without a single quote character. The same class hits any query builder that accepts request-shaped objects (Mongo/Mongoose, Firestore-style filters, `prisma.$queryRawUnsafe`, ORM `where` clauses spread from input).
+
+```ts
+// ❌ WRONG — request object flows into the filter
+const user = await users.findOne({ email: req.body.email, password: req.body.password });
+
+// ✅ RIGHT — strict schema guarantees scalars before the query is built
+const { email } = loginSchema.parse(body);        // z.strictObject({ email: z.string().email(), ... })
+const user = await users.findOne({ email: { $eq: email } });
+```
+
+The primary defense is [chapter 03](03-input-validation.md)'s strict parsing — `z.string()` rejects `{"$gt":""}` outright. Belt-and-suspenders for Mongo-family stores: strip `$`-prefixed keys and dots from any object that must remain dynamic (`mongo-sanitize`-style), pin values with `$eq`, and never spread parsed-but-open objects (`z.record`, `passthrough`) into a `where`. Prisma/Drizzle: raw-query escape hatches (`$queryRawUnsafe`, `sql.raw`) take no interpolated user input — same bar as Rule 7.
+
+**Verify:** grep for `findOne({`/`find({`/`where:` sites fed by request-derived objects → every value passed is a schema-validated scalar; test login/search endpoints with `{"$gt":""}` and `{"$ne":null}` payloads → 400 from the schema, never a match.
 
 ---
 
