@@ -13,6 +13,7 @@ Parse, don't validate: every external input crosses a strict schema at the trust
 7. Keep one shared schema module; derive variants with `.pick()/.omit()/.extend()` — no duplicated client/server schemas.
 8. Client-side validation is UX only; the server re-parses everything.
 9. Bound the request before parsing it: body-size caps ahead of `req.json()`, schema-bounded pagination (`max(100)`), and no hand-written backtracking regex (ReDoS).
+10. Any filesystem path derived from user input is reduced to a basename or resolved and prefix-checked against the intended directory — `../` never survives to `fs`/`open()`.
 
 ## Rule 1 — Parse at every trust boundary
 
@@ -178,6 +179,24 @@ const Page = z.strictObject({
 FastAPI: enforce a max `Content-Length` in middleware or at the proxy, and `Field(ge=1, le=100)` on pagination params. Any hand-written regex that must exist over user input gets a ReDoS linter (e.g. recheck) in CI — but Zod/Pydantic built-in formats are already safe, so mostly: don't write them.
 
 **Verify:** test posts a body over the cap → 413 before any DB/LLM work; `?limit=100000` → 400; the ReDoS linter runs in CI over `src/`.
+
+## Rule 10 — Path traversal: user input never becomes a raw filesystem path
+
+**Why:** any endpoint that serves, reads, or writes a file named by the request (`/files/[name]`, `?template=`, asset servers in CLI/dev tools) is one `../` away from reading `.env` or arbitrary files the process can see — CVE-2026-63188 (@logto/tunnel, CVSS 8.7) was exactly this: `../` segments in a static-asset request escaping the assets directory. Schema validation doesn't save you: `../../.env` is a perfectly valid string.
+
+```ts
+// ❌ WRONG — user string joined into a path
+const data = await fs.readFile(path.join(UPLOAD_DIR, req.query.name));
+
+// ✅ RIGHT — basename-only when flat, or resolve + prefix-check when nested
+const name = path.basename(parsed.name);               // flat store: strips every separator
+const full = path.resolve(UPLOAD_DIR, parsed.relPath); // nested store:
+if (full !== UPLOAD_DIR && !full.startsWith(UPLOAD_DIR + path.sep)) notFound();
+```
+
+Python: `(BASE / rel).resolve().is_relative_to(BASE)` before `open()`. Prefer opaque IDs mapped to paths in the DB over user-visible filenames entirely ([uploads](11-file-uploads.md) Rule on randomized keys is the storage-side twin of this rule).
+
+**Verify:** grep for `readFile|createReadStream|sendFile|open(` sites whose argument contains request-derived data → each goes through the shared safe-path helper; test requests `..%2f..%2f.env` and `....//` variants → 404, never file contents.
 
 ---
 
