@@ -17,6 +17,7 @@ Every dependency, lifecycle script, and CI action is code you run with your cred
 11. Generate a CycloneDX SBOM (Syft/Trivy) on every release; re-scan stored SBOMs on advisory days.
 12. Self-host browser scripts by default; any cross-origin `<script>` carries SRI `integrity` + `crossorigin`; tag managers never on payment pages.
 13. Ban dangerous sinks with a repo-local Semgrep pack: pickle/`yaml.load`/eval/`Function()`, recursive merges, shell-string exec, `Template(user_string)`.
+14. Vet every dependency an agent adds: confirm it resolves to the real upstream (repo, downloads, age), reject forks/typosquats/alt-scopes, and remember malware ships before any CVE and can carry valid provenance.
 
 ## Rule 1 — Verify before install: slopsquatting is an active attack
 
@@ -238,6 +239,29 @@ Tag managers are production code deployed by whoever holds the container login: 
 
 **Verify:** seeding `yaml.load(request.data)` or `new Function(body.code)` on a test branch fails the SAST job (Rule 7).
 
+## Rule 14 — Vet the dependencies an agent adds, before they install
+
+**Why:** the fastest-growing supply-chain vector in 2026 is a coding agent adding a small, plausible-sounding package to satisfy a feature request, with no human looking at it. Real, recent examples: a `sonner` toast-library typosquat (`sonmors`) that pulled in two coordinated helper packages to reconstruct a payload from a PNG; `express-session-timer`, which recursively deleted the project's `src/` seconds after `require()`; `tailwind-aspect-styles`, which fetched and ran remote code at install; and forks like `@nexustechpro/baileys` that impersonate a well-known package under a different scope. None of these had a CVE — the package *is* the payload — and the compromised `@7nohe/openapi-react-query-codegen` releases even carried **valid SLSA provenance**. Signed and popular is not the same as safe.
+
+```jsonc
+// ❌ WRONG — agent adds whatever name matches the request
+"dependencies": {
+  "tailwind-aspect-styles": "^0.4.2",   // name-squat, not the real plugin
+  "@someuser/baileys": "latest"          // fork under a random scope, unpinned
+}
+
+// ✅ RIGHT — every added package is verified against the real upstream, and pinned
+//   1. Resolve the name on npmjs.com/PyPI: does it link to the genuine repo?
+//   2. Sanity-check downloads + age (a "utility" with 40 weekly downloads is a red flag).
+//   3. Reject typosquats, forks, and alternate scopes of well-known names.
+//   4. Pin an exact version; treat `"latest"` or `git+https://…` INSIDE a new dep as a red flag.
+"dependencies": { "sonner": "2.0.7" }
+```
+
+Checklist for anything an agent introduces — runtime, **codegen, or CI/workflow tooling alike** (the malicious `openai-pr-reviewer` was a fake PR-review bot; compromised OpenAPI codegens ran credential stealers): verify upstream, pin, and prefer installing an unfamiliar package in a **disposable sandbox** first, since destructive payloads run on import. Provenance and popularity are inputs to the decision, never the decision itself.
+
+**Verify:** CI diffs `package.json`/lockfile changes and fails on a new dependency not on an allowlist or not resolvable to a verified upstream; a scheduled job re-checks installed packages against a malicious-package feed (GitHub Advisories, OSV) — not just `npm audit`, which only knows about filed CVEs.
+
 ---
 
-Related: [05 — Secrets & Env](05-secrets-and-env.md) (gitleaks/TruffleHog CI, push protection — what stolen CI creds are after) · [13 — SSRF & LLM](13-ssrf-and-llm.md) (why model suggestions are untrusted input, packages included).
+Related: [05 — Secrets & Env](05-secrets-and-env.md) (gitleaks/TruffleHog CI, push protection — what stolen CI creds are after) · [13 — SSRF & LLM](13-ssrf-and-llm.md) (why model suggestions are untrusted input, packages included) · [21 — Agents, MCP & RAG](21-agent-mcp-rag.md) (MCP servers as credentialed dependencies).
