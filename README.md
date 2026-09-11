@@ -102,15 +102,15 @@ Everything is generic-first: examples use Next.js / Supabase / Clerk / Stripe be
 | 10 | [🧱 Headers, CSP & CORS](rules/10-headers-csp-cors.md) | Nonce-based CSP, exact-origin CORS, hardened cookies. |
 | 11 | [📁 File Uploads](rules/11-file-uploads.md) | Magic-byte checks, private buckets, randomized keys, re-encode images. |
 | 12 | [💳 Payments](rules/12-payments.md) | Fulfill from verified webhooks only, never from a redirect. |
-| 13 | [🤖 SSRF & LLM Apps](rules/13-ssrf-and-llm.md) | Never fetch a user- or model-supplied URL raw; LLM output is untrusted input. |
-| 14 | [📦 Supply Chain](rules/14-supply-chain.md) | Verify every package exists before installing; pin, lock, scan. |
+| 13 | [🤖 SSRF & LLM Apps](rules/13-ssrf-and-llm.md) | Never fetch a user/model URL raw; LLM output and expression evaluators are untrusted code. |
+| 14 | [📦 Supply Chain](rules/14-supply-chain.md) | Vet every dependency an agent adds against its real upstream; pin, lock, scan. |
 | 15 | [✅ Self-Verification](rules/15-testing-verification.md) | Security regressions must turn CI red: negative tests for every rule. |
 | 16 | [🗃️ Caching & CDN](rules/16-caching-cdn.md) | Personalized responses are never shared-cacheable; cache keys include the user. |
 | 17 | [🧬 Client Data Protection](rules/17-client-data-protection.md) | Client data never enters git, logs, URLs, LLM prompts, or dev copies unmasked. |
 | 18 | [🧼 Output Encoding & XSS](rules/18-output-encoding-xss.md) | No raw-HTML sinks on user data; one sanctioned sanitizer; URL scheme allowlists. |
 | 19 | [⚖️ Business Logic](rules/19-business-logic.md) | Multi-step flows are server-side state machines; one-shot semantics via UNIQUE constraints. |
-| 20 | [🎫 OAuth & Account Lifecycle](rules/20-oauth-account-lifecycle.md) | PKCE + exact redirect URIs; link accounts by immutable sub, never email. |
-| 21 | [🕸️ Agents, MCP & RAG](rules/21-agent-mcp-rag.md) | Never combine private data + untrusted content + egress; retrieval runs as the user. |
+| 20 | [🎫 OAuth & Account Lifecycle](rules/20-oauth-account-lifecycle.md) | PKCE + exact redirect URIs; resolve identity by exact-match sub; every session path shares one gate. |
+| 21 | [🕸️ Agents, MCP & RAG](rules/21-agent-mcp-rag.md) | Never combine private data + untrusted content + egress; tool output and gateways are attack surface. |
 | 22 | [🚨 Detection & Incident Response](rules/22-detection-incident-response.md) | Page-worthy alerts, canary tokens, tested offsite backups, a real runbook. |
 | 23 | [✉️ Email, SMS & Notifications](rules/23-email-sms-notifications.md) | DMARC enforced; header injection blocked; email change is an ATO surface. |
 | 24 | [📡 Realtime Channels](rules/24-realtime-channels.md) | Authenticate the WS upgrade; Realtime channels private by default; exact-origin postMessage. |

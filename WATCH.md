@@ -16,6 +16,12 @@ A daily-updated log of new vulnerabilities, breaches, and research affecting AI-
 
 ---
 
+## Actioned into rules
+
+- **2026-09-11:** The recurring lessons from the 2026-08-25 → 2026-09-11 findings below were promoted into permanent chapter rules: supply-chain vetting of agent-added dependencies (ch14 R14), agent tool-output secret leakage + self-hosted gateway auth (ch21 R12–13), expression/template evaluators as code-execution sandboxes (ch13 R10), OAuth exact-match identity resolution + consistent session-minting paths (ch20 R10–11), and live-secret-prefix commit/deploy gating (ch05 R9). The log entries below remain as the source record.
+
+---
+
 ## Log
 
 ### 2026-08-20 — baseline
