@@ -12,6 +12,7 @@ Secrets are protected by structure (build failures, quarantine modules, scanners
 6. A leaked secret is rotated at the provider immediately — deleting the commit is never enough.
 7. Never log secrets: redact `authorization`, `cookie`, `*.token`, `*.apiKey`, `*.secret` paths; never log `process.env`.
 8. Use separate keys per environment (dev/preview/prod) with the least-privilege scope each key needs.
+9. Block commits and deploys that contain live-secret prefixes (`sk_live_`, `AKIA`, `ghp_`, …) with a fast prefix grep, on top of entropy scanning.
 
 ## Rule 1 — One typed env module, validated at build time
 
@@ -161,6 +162,20 @@ logger.info({ evtType: evt.type, evtId: evt.data.id }, "webhook received");
 
 **Verify:** provider dashboards show distinct keys per environment; every Vercel secret is marked Sensitive; `vercel env ls` shows no prod-scoped secret exposed to preview.
 
+## Rule 9 — Block known live-secret prefixes at the commit and deploy gate
+
+**Why:** entropy-based scanning catches random-looking strings, but the highest-value secrets announce themselves with a fixed prefix — `sk_live_` (Stripe), `AKIA` (AWS), `ghp_` (GitHub), `xoxb-` (Slack). A fast, exact prefix grep is cheap, has near-zero false positives, and catches the exact mistake that a coding agent makes when it hardcodes a key to "make the call work." It is not hypothetical: an August 2026 dataset traded 659 merchants' **live** `sk_live_` Stripe keys plus ~688,000 customer records, sourced from exposed env files and public repos — one leaked live key is direct payment and payout access.
+
+```yaml
+# ✅ RIGHT — a prefix gate in pre-commit AND CI, alongside gitleaks (Rule 5)
+- id: block-live-secret-prefixes
+  entry: bash -c 'git diff --cached -U0 | grep -nE "sk_live_|AKIA[0-9A-Z]{16}|ghp_[0-9A-Za-z]{36}|xox[baprs]-" && { echo "live secret prefix in staged diff"; exit 1; } || true'
+```
+
+Run the same grep in CI over the pushed diff and in the pre-deploy check next to the `/.env` and `/.git/config` probes ([25 — Deployment](25-deployment-infrastructure.md)). This complements, not replaces, gitleaks/TruffleHog (Rule 5) — prefixes catch the obvious, entropy catches the rest. Any hit is treated as already-compromised: rotate at the provider (Rule 6) before anything else.
+
+**Verify:** committing a file containing `sk_live_deadbeef…` fails the pre-commit hook and the CI gate; the same string in the built output fails the pre-deploy check.
+
 ---
 
-Related: [14 — Supply Chain](14-supply-chain.md) (scanner CI wiring, SHA-pinned actions) · [07 — Rate Limiting](07-rate-limiting.md) (fail-closed on missing security env).
+Related: [14 — Supply Chain](14-supply-chain.md) (scanner CI wiring, SHA-pinned actions) · [07 — Rate Limiting](07-rate-limiting.md) (fail-closed on missing security env) · [17 — Client Data](17-client-data-protection.md) (history remediation after a real leak).
