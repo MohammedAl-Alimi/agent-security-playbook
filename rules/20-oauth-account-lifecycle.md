@@ -13,6 +13,8 @@ Federated login fails at the seams — linking, redirects, and emailed links —
 7. Passkeys: pin the RP ID explicitly; recovery paths get the same rigor as the passkey itself.
 8. Never hand-roll SAML; delegate to Clerk Enterprise SSO/WorkOS with per-tenant IdP scoping.
 9. Store provider tokens AES-GCM-encrypted with minimum scopes; revoke at the provider on disconnect.
+10. Resolve an OAuth/OIDC `sub` to a local account by exact equality only — never a `LIKE`/substring match (ORM JSON helpers degrade to substring on SQLite).
+11. Enforce identical checks on every session-minting path — bind refresh tokens to the originally-consented resource, and apply the same role/policy evaluation to callback, token-exchange, and SSO variants alike.
 
 ## Rule 1 — Authorization Code + PKCE, CSPRNG state bound to the session
 
@@ -206,3 +208,45 @@ await db.connection.delete({ where: { id } });
 ```
 
 **Verify:** grep the schema for provider token columns without the encryption wrapper → zero; disconnect a test connection, then call the provider API with the old token → provider returns invalid-token.
+
+## Rule 10 — Resolve the identity claim by exact match, never a pattern
+
+**Why:** the step that maps a verified OAuth/OIDC `sub` to a local account is an authentication decision, and a fuzzy match there is account takeover. Open WebUI (CVE-2026-87016, CVSS 8.1) looked identities up with an ORM JSON helper that **silently degraded to a SQL `LIKE` substring match on SQLite** — so an attacker-controlled subject claim containing `%` or `_` matched an unintended account, including an administrator's. The same code was safe on Postgres, which is exactly why it slipped through. Generic "find where JSON field contains X" helpers are the trap.
+
+```ts
+// ❌ WRONG — ORM JSON lookup that becomes a substring match on some engines
+const user = await db.user.findFirst({ where: { oauth: { path: ["sub"], string_contains: claim.sub } } });
+
+// ✅ RIGHT — exact equality on a dedicated, indexed column
+const user = await db.identity.findUnique({
+  where: { provider_sub: { provider: "google", sub: claim.sub } },   // exact match, unique key
+});
+```
+
+Store `(provider, sub)` as its own unique-constrained columns and compare with equality; never resolve identity by a `contains`/`LIKE`/regex helper, and never key on email ([Rule 3](#rule-3--link-accounts-by-immutable-sub-not-email)).
+
+**Verify:** a test signs in with a `sub` of `%` (or `admin_sub` with a wildcard character) and is rejected / creates a new isolated account — never matches an existing one; grep identity-resolution queries for `contains`/`LIKE`/`string_contains` on the subject → zero.
+
+## Rule 11 — Every path that mints a session enforces the same rules
+
+**Why:** apps grow more than one way to turn an external identity into a session — the standard callback, a token-exchange endpoint, an SSO variant, a refresh — and a check enforced on one path silently doesn't apply to the others. Open WebUI's token-exchange login (CVE-2026-88006) reimplemented identity lookup separately and **omitted the role-management policy**, so deprovisioned or downgraded users kept access through the alternate path. And n8n's OAuth refresh (GHSA-cw9w-vv67-hf73) didn't bind the refreshed token to the resource the user originally consented to, letting a token for one workflow be refreshed into access on another. Consent and authorization are per-resource and per-request, not granted once at first login.
+
+```ts
+// ❌ WRONG — role check only on the main callback; refresh ignores original scope
+app.post("/oauth/token-exchange", async (req) => mintSession(await lookupUser(req)));  // no role eval
+
+// ✅ RIGHT — one shared gate every session-minting path calls
+async function establishSession(identity: Identity, resource: string) {
+  const role = await evaluateRolePolicy(identity);      // same policy everywhere
+  if (role === "denied") throw new Forbidden();
+  return issueSession(identity, { role, boundResource: resource });   // refresh stays bound to `resource`
+}
+```
+
+Route the callback, token-exchange, SSO, and refresh flows through the **same** authorization gate; bind refresh tokens to the originally-consented resource/scope so a valid refresh can't be replayed against a different one.
+
+**Verify:** an integration test demotes a user at the IdP, then exercises *every* login path (callback, token-exchange, SSO) → all deny; a refresh token issued for resource A is rejected when presented for resource B.
+
+---
+
+Related: [01 — Authentication](01-authentication.md) (session lifecycle, MFA) · [02 — Authorization](02-authorization.md) (the role/policy gate these paths must share) · [06 — Hashing & Tokens](06-hashing-and-tokens.md) (token storage, JWT verification).
