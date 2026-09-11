@@ -12,11 +12,11 @@ These rules are mandatory for all code in this project. Full patterns: [agent-se
 1. Every route handler, server action, and data-layer function performs its own auth check. Middleware is redirect UX, never the security boundary.
 2. Every query that takes an object ID also filters by the caller's identity (or tenant). Return 404 on zero rows. "Is logged in" is not authorization.
 3. Roles, user IDs, org IDs, and prices are derived from the session or server — never accepted from a request body.
-4. Federated login: Authorization Code + PKCE, exact-match redirect URIs, link accounts by immutable `sub` never by email; `returnTo`/`next` params validated as same-origin paths; magic links stored hashed, short-lived, consumed via POST; session ID regenerated on every privilege change.
+4. Federated login: Authorization Code + PKCE, exact-match redirect URIs, link accounts by immutable `sub` never by email; resolve the `sub` to a local account by exact equality (never `LIKE`/substring — ORM JSON helpers degrade to substring on SQLite); `returnTo`/`next` params validated as same-origin paths; magic links stored hashed, short-lived, consumed via POST; session ID regenerated on every privilege change; every session-minting path (callback, token-exchange, SSO, refresh) shares one authz gate and binds refresh tokens to the consented resource.
 
 ### Input
 5. Parse all external input (body, params, searchParams, headers, webhooks, LLM output) through a strict schema (`z.strictObject()` / Pydantic `extra='forbid'`) before use. Never spread raw input into a DB write.
-6. Validate env vars at boot; a missing security-critical var fails the build/boot, never silently disables a protection.
+6. Validate env vars at boot; a missing security-critical var fails the build/boot, never silently disables a protection. Any expression/template language evaluated against user- or LLM-supplied input (JSONata, SymPy, Handlebars, codegen templates) is code execution — allowlist or isolate the evaluator, never denylist, and pin patched versions.
 
 ### Output & rendering
 7. innerHTML-family sinks (`dangerouslySetInnerHTML`, `innerHTML`, `insertAdjacentHTML`) are banned on user- or third-party-derived data; legitimate rich HTML flows through ONE sanctioned sanitizer module; user-supplied URLs in href/src pass a scheme allowlist (no `javascript:`/`data:`); LLM/markdown output renders with HTML disabled.
@@ -47,7 +47,7 @@ These rules are mandatory for all code in this project. Full patterns: [agent-se
 24. Realtime: authenticate the WebSocket/SSE handshake itself with an exact-origin allowlist; Supabase Realtime channels are `private: true` with RLS on `realtime.messages`; postMessage uses exact-match origins and validated payloads.
 
 ### Agents & AI
-25. No agent context combines private-data reads + untrusted-content ingestion + external egress; MCP servers are credentialed dependencies (verified source, pinned version, hashed tool descriptions, one scoped credential each); RAG retrieval runs AS the requesting user (vector store under RLS/tenant filters); agent memory is schema-validated on write and untrusted on read.
+25. No agent context combines private-data reads + untrusted-content ingestion + external egress; MCP servers are credentialed dependencies (verified source, pinned version, hashed tool descriptions, one scoped credential each); RAG retrieval runs AS the requesting user (vector store under RLS/tenant filters); agent memory is schema-validated on write and untrusted on read; never write a secret to a tool's stdout/stderr (frameworks capture it into model context — prompt-exfiltratable); self-hosted AI gateways/harness control APIs authenticate every admin/registration endpoint by default.
 
 ### Client data
 26. Production/client data never enters the repo: fixtures and seeds use Faker-generated or export-time-anonymized data; data-shaped artifacts (`*.csv`, `*.sqlite*`, `*.dump`, `*.log`, `data/`) are gitignored, and notebooks are output-stripped (nbstripout).
@@ -56,8 +56,8 @@ These rules are mandatory for all code in this project. Full patterns: [agent-se
 
 ### Hygiene
 29. Errors to clients: generic message + request ID only. Catch blocks around security checks fail closed. Structured logs with PII/secret redaction; never interpolate raw user input into log strings.
-30. Nothing secret ever carries a client env prefix (`NEXT_PUBLIC_`, `VITE_`). gitleaks runs pre-commit and in CI.
-31. Verify every new dependency on the registry before installing (LLM-hallucinated names get typosquatted). Commit lockfiles; CI installs frozen.
+30. Nothing secret ever carries a client env prefix (`NEXT_PUBLIC_`, `VITE_`). gitleaks runs pre-commit and in CI, plus a fast live-secret-prefix grep (`sk_live_`, `AKIA`, `ghp_`) that blocks the commit/deploy.
+31. Verify every new dependency on the registry before installing — including ones an agent adds on its own: confirm it resolves to the real upstream (repo, downloads, age), reject forks/typosquats/alt-scopes, remember malware ships before any CVE and can carry valid provenance, and sandbox-test unfamiliar packages. Commit lockfiles; CI installs frozen.
 
 ### Operations
 32. Security events page a human: alerts on auth-failure spikes and mass exports, canary tokens planted and mapped in the incident runbook, offsite backups with quarterly restore tests.
