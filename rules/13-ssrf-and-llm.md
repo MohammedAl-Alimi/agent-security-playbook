@@ -13,6 +13,7 @@ Two rules of trust: any URL from a request or a model is attacker-controlled, an
 7. Never put secrets in prompts; run agent fetches in a context that holds no secrets.
 8. Rate-limit and cap daily spend on every LLM endpoint before creating the model stream.
 9. Log prompts/outputs as structured fields with PII redaction — never raw into message strings.
+10. Any expression/template language evaluated against user- or model-supplied input is a code-execution sandbox — use an allowlisted or isolated evaluator, never a denylist, and pin patched versions.
 
 ## Rule 1 — One named validator for every untrusted outbound fetch
 
@@ -173,6 +174,27 @@ logger.info({
 
 **Verify:** log-redaction unit test: a prompt containing an email + phone number produces a log line containing neither; retention policy on the raw-prompt store is documented and enforced.
 
+## Rule 10 — Expression and template languages are code-execution sandboxes
+
+**Why:** letting users or an LLM supply an "expression" to evaluate — a JSONata query, a SymPy formula, a Handlebars template, a codegen template value — is running code, not parsing data. 2026 proved this repeatedly: three critical JSONata bugs (CVE-2026-77413/414/415) let a crafted expression reach `process.getBuiltinModule('child_process')` for full RCE; `qwed-mcp`'s SymPy evaluator, marketed as a *verification* layer, was still exploitable one patch after its "fix" because its **denylist** missed `__getattribute__`/`__call__` and could be evaded with string concatenation; and Orval's code generator spliced attacker-controlled OpenAPI values into generated JS, injecting code that ran when the client was called. A denylist around an evaluator is routinely bypassed, often the same week as the patch.
+
+```ts
+// ❌ WRONG — evaluate a user/LLM-supplied expression against your data
+import jsonata from "jsonata";
+const result = await jsonata(req.body.expr).evaluate(record);   // expr can reach child_process
+
+// ✅ RIGHT — pin patched, and only allow expressions you can enumerate
+// If users must filter/transform, expose a fixed allowlist of named operations
+// (or a sandboxed worker with no host bindings), never a free-form expression string.
+const op = OPERATIONS[req.body.opId];        // allowlisted, not attacker-authored
+if (!op) return badRequest();
+const result = op(record);
+```
+
+Rules of thumb: pin every evaluator/codegen to its patched version and re-check the vendor's advisory list after upgrading (Orval shipped one CVE fix, then eight more of the same bug class two days later — one patch ≠ the class closed). Treat the *input to a code generator* (an OpenAPI/JSON schema) as untrusted when it comes from a third party. And never trust a denylist to contain an evaluator exposed to untrusted input — require an allowlist or true isolation. This is the same "output/expression is untrusted" principle as Rules 3–4, applied to evaluators the app runs itself.
+
+**Verify:** grep for evaluator entry points (`jsonata(`, `parse_expr(`, `Handlebars.compile(`, `new Function(`, `eval(`) fed by request- or model-derived strings → each is allowlisted or sandboxed; the evaluator/codegen versions in the lockfile are at or above the latest advisory's fixed version.
+
 ---
 
-Related: [07 — Rate Limiting](07-rate-limiting.md) (limiter mechanics, fail-closed) · [05 — Secrets & Env](05-secrets-and-env.md) (why secrets never reach client or prompt).
+Related: [07 — Rate Limiting](07-rate-limiting.md) (limiter mechanics, fail-closed) · [05 — Secrets & Env](05-secrets-and-env.md) (why secrets never reach client or prompt) · [14 — Supply Chain](14-supply-chain.md) (codegen packages as an injection surface, dangerous-sink Semgrep pack).
