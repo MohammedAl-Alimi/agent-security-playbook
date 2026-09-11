@@ -15,6 +15,8 @@ An agent is only as trustworthy as the least-trusted content in its context — 
 9. Retrieved chunks and agent memory are untrusted input; memory writes are schema-validated and provenance-tagged, partitioned per user.
 10. Never run coding agents with permission-bypass flags on untrusted repos or CI; give them scoped short-lived creds and sandboxed installs.
 11. Cap every agent: enforced spend budgets, `stopWhen` loop ceilings, `needsApproval` on destructive tools.
+12. Never write a secret to a tool's stdout/stderr — agent frameworks capture it into the model's context, where any prompt can retrieve it.
+13. A self-hosted AI gateway, router, or harness control API in front of agent traffic is attack surface: authenticate every admin/registration endpoint by default.
 
 ## Rule 1 — Break the lethal trifecta
 
@@ -172,6 +174,50 @@ deleteProject: tool({
 
 **Verify:** manifest test asserts every agent loop declares `stopWhen` and every destructive tool (delete/pay/send/deploy) has `needsApproval: true`; budget-breach test from [13 Rule 7](13-ssrf-and-llm.md) runs against agent endpoints too.
 
+## Rule 12 — Tool output is a secret-exfiltration channel
+
+**Why:** agent frameworks capture a tool's stdout/stderr and feed it back into the model's context window. So a `console.log(apiKey)` or `print(token)` left in tool code — the single most common debug habit — becomes retrievable by anyone who can chat with the agent, via a plain natural-language question. A 2026 study of an LLM-skill marketplace found 3.1% of skills leaking credentials this way, 73.5% of them through ordinary debug logging, and 89.6% of the leaked credentials immediately exploitable. The playbook's do-not-log discipline ([09 — Logging & Errors](09-logging-and-errors.md), [17 — Client Data](17-client-data-protection.md)) applies to tool output too, not just structured app logs.
+
+```ts
+// ❌ WRONG — debug line in a tool the agent invokes; the key lands in model context
+async function callBillingApi(args: Args) {
+  console.log("using key", process.env.STRIPE_KEY);   // now prompt-exfiltratable
+  return stripe.charges.create(args);
+}
+
+// ✅ RIGHT — nothing sensitive returned to or printed by the tool
+async function callBillingApi(args: Args) {
+  const res = await stripe.charges.create(args);
+  return { id: res.id, status: res.status };          // no secrets in the return or logs
+}
+```
+
+Third-party "skills"/tools pulled into an agent's toolset get the same scrutiny as any dependency ([14 — Supply Chain](14-supply-chain.md)): a tool that logs a secret is as dangerous as one that exfiltrates it directly, because the framework does the exfiltration for it.
+
+**Verify:** grep tool/skill code for `console.log`/`print`/`logger.*` lines that reference env vars, tokens, or credential fields → zero; a canary secret placed in the tool's environment is never present in captured tool output during an eval run.
+
+## Rule 13 — Self-hosted AI gateways and harness control APIs are attack surface
+
+**Why:** the infrastructure you put *in front of* agent traffic is a target in its own right. OmniRoute, a self-hosted multi-provider LLM router, exposed an unauthenticated `/api/acp/agents` registration endpoint that ran attacker-supplied `binary`/`versionCommand` values through `execFileSync()` — unauthenticated RCE (CVSS 9.5) on the box brokering every model call. Agent harnesses have shipped the same shape: a loopback HTTP control server with no auth, reachable by any code sharing the sandbox's network namespace. "Local" or "loopback" is not authentication.
+
+```ts
+// ❌ WRONG — control/registration endpoint trusts the network position
+app.post("/api/agents", (req, res) => {              // no auth when requireLogin=false
+  execFileSync(req.body.binary, req.body.args);       // attacker-chosen command
+});
+
+// ✅ RIGHT — authenticate every admin/registration path, and never exec user-named binaries
+app.post("/api/agents", requireAdminToken, (req, res) => {
+  const tool = TOOL_ALLOWLIST[req.body.toolId];       // allowlist, not free-form binary
+  if (!tool) return res.status(400).end();
+  runSandboxed(tool);
+});
+```
+
+Keep self-hosted gateways/routers patched (they broker credentials and traffic for the whole agent fleet), require auth by default, and never let an admin API name a binary to execute — allowlist tools instead ([13 Rule 5](13-ssrf-and-llm.md)).
+
+**Verify:** every admin/registration/control route on a self-hosted gateway or harness rejects an unauthenticated request in a test; grep for `exec`/`spawn`/`execFileSync` fed by request fields → none without an allowlist lookup.
+
 ---
 
-Related: [13 — SSRF & LLM](13-ssrf-and-llm.md) (single-call hygiene, tool least-privilege, spend caps) · [14 — Supply Chain](14-supply-chain.md) (pinning, install scripts) · [04 — Database & RLS](04-database-rls.md) (the RLS model RAG must inherit) · [02 — Authorization](02-authorization.md).
+Related: [13 — SSRF & LLM](13-ssrf-and-llm.md) (single-call hygiene, tool least-privilege, spend caps) · [14 — Supply Chain](14-supply-chain.md) (pinning, install scripts) · [09 — Logging & Errors](09-logging-and-errors.md) (do-not-log discipline this extends) · [04 — Database & RLS](04-database-rls.md) (the RLS model RAG must inherit) · [02 — Authorization](02-authorization.md).
