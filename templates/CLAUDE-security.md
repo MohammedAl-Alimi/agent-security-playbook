@@ -10,7 +10,7 @@ These rules are mandatory for all code in this project. Full patterns: [agent-se
 
 ### Identity & access
 1. Every route handler, server action, and data-layer function performs its own auth check. Middleware is redirect UX, never the security boundary.
-2. Every query that takes an object ID also filters by the caller's identity (or tenant). Return 404 on zero rows. "Is logged in" is not authorization.
+2. Every query that takes an object ID also filters by the caller's identity (or tenant). Return 404 on zero rows. "Is logged in" is not authorization. The same ownership check runs on *every* path to the resource — test/preview/dry-run endpoints, internal message buses, and agent/tool-resolution paths, not just the primary route.
 3. Roles, user IDs, org IDs, and prices are derived from the session or server — never accepted from a request body.
 4. Federated login: Authorization Code + PKCE, exact-match redirect URIs, link accounts by immutable `sub` never by email; resolve the `sub` to a local account by exact equality (never `LIKE`/substring — ORM JSON helpers degrade to substring on SQLite); `returnTo`/`next` params validated as same-origin paths; magic links stored hashed, short-lived, consumed via POST; session ID regenerated on every privilege change; every session-minting path (callback, token-exchange, SSO, refresh) shares one authz gate and binds refresh tokens to the consented resource.
 
@@ -23,7 +23,7 @@ These rules are mandatory for all code in this project. Full patterns: [agent-se
 
 ### Data
 8. Every new table gets RLS enabled + full policies (incl. WITH CHECK and DELETE) in the same migration that creates it.
-9. Service-role/admin DB credentials live only in `server-only` modules. Parameterized queries only.
+9. Service-role/admin DB credentials live only in `server-only` modules. Parameterized queries only — and parameterizing values isn't enough: allowlist/identifier-quote table/column names, and never build a REST/PostgREST filter string from user- or LLM-supplied text.
 10. Counters, credits, and quotas change via atomic conditional updates (`UPDATE ... WHERE balance >= x RETURNING`), never read-modify-write.
 
 ### Business logic
@@ -57,7 +57,7 @@ These rules are mandatory for all code in this project. Full patterns: [agent-se
 ### Hygiene
 29. Errors to clients: generic message + request ID only. Catch blocks around security checks fail closed. Structured logs with PII/secret redaction; never interpolate raw user input into log strings.
 30. Nothing secret ever carries a client env prefix (`NEXT_PUBLIC_`, `VITE_`). gitleaks runs pre-commit and in CI, plus a fast live-secret-prefix grep (`sk_live_`, `AKIA`, `ghp_`) that blocks the commit/deploy.
-31. Verify every new dependency on the registry before installing — including ones an agent adds on its own: confirm it resolves to the real upstream (repo, downloads, age), reject forks/typosquats/alt-scopes, remember malware ships before any CVE and can carry valid provenance, and sandbox-test unfamiliar packages. Commit lockfiles; CI installs frozen.
+31. Verify every new dependency on the registry before installing — including ones an agent adds on its own: confirm it resolves to the real upstream (repo, downloads, age), reject forks/typosquats/alt-scopes, remember malware ships before any CVE and can carry valid provenance, and sandbox-test unfamiliar packages. Pin internal scopes to your private registry (dependency confusion: an inflated version like `99.99.99` shadows your package); the payload can hide in runtime/browser code and exfil over DNS, so vetting is behavioral, not a one-time install-script scan; a commit-SHA pin only holds if the resolver verifies content, so disable silent plugin auto-update on unpatched agent marketplaces. Commit lockfiles; CI installs frozen.
 
 ### Operations
 32. Security events page a human: alerts on auth-failure spikes and mass exports, canary tokens planted and mapped in the incident runbook, offsite backups with quarterly restore tests.

@@ -91,7 +91,7 @@ Everything is generic-first: examples use Next.js / Supabase / Clerk / Stripe be
 | # | Chapter | The one-line version |
 |---|---------|----------------------|
 | 01 | [🔑 Authentication](rules/01-authentication.md) | Auth in every handler; middleware is never the boundary. |
-| 02 | [🛡️ Authorization & RBAC](rules/02-authorization.md) | Every query that takes an ID also filters by the caller's identity. |
+| 02 | [🛡️ Authorization & RBAC](rules/02-authorization.md) | Every query filters by the caller's identity, on every path (test, internal, and agent routes included). |
 | 03 | [🧪 Input Validation](rules/03-input-validation.md) | Parse, don't validate: strict schemas at every trust boundary. |
 | 04 | [🗄️ Database & RLS](rules/04-database-rls.md) | RLS on every table, in the same migration that creates it. |
 | 05 | [🔐 Secrets & Environment](rules/05-secrets-and-env.md) | Secrets are structurally quarantined, scanned, and never client-prefixed. |
@@ -103,7 +103,7 @@ Everything is generic-first: examples use Next.js / Supabase / Clerk / Stripe be
 | 11 | [📁 File Uploads](rules/11-file-uploads.md) | Magic-byte checks, private buckets, randomized keys, re-encode images. |
 | 12 | [💳 Payments](rules/12-payments.md) | Fulfill from verified webhooks only, never from a redirect. |
 | 13 | [🤖 SSRF & LLM Apps](rules/13-ssrf-and-llm.md) | Never fetch a user/model URL raw; LLM output and expression evaluators are untrusted code. |
-| 14 | [📦 Supply Chain](rules/14-supply-chain.md) | Vet every dependency an agent adds against its real upstream; pin, lock, scan. |
+| 14 | [📦 Supply Chain](rules/14-supply-chain.md) | Vet agent-added deps against their real upstream; guard dependency confusion; verify commit pins. |
 | 15 | [✅ Self-Verification](rules/15-testing-verification.md) | Security regressions must turn CI red: negative tests for every rule. |
 | 16 | [🗃️ Caching & CDN](rules/16-caching-cdn.md) | Personalized responses are never shared-cacheable; cache keys include the user. |
 | 17 | [🧬 Client Data Protection](rules/17-client-data-protection.md) | Client data never enters git, logs, URLs, LLM prompts, or dev copies unmasked. |
