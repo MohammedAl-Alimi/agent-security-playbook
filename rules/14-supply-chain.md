@@ -18,6 +18,8 @@ Every dependency, lifecycle script, and CI action is code you run with your cred
 12. Self-host browser scripts by default; any cross-origin `<script>` carries SRI `integrity` + `crossorigin`; tag managers never on payment pages.
 13. Ban dangerous sinks with a repo-local Semgrep pack: pickle/`yaml.load`/eval/`Function()`, recursive merges, shell-string exec, `Template(user_string)`.
 14. Vet every dependency an agent adds: confirm it resolves to the real upstream (repo, downloads, age), reject forks/typosquats/alt-scopes, and remember malware ships before any CVE and can carry valid provenance.
+15. An implausibly high version (`19999.x`, `99.99.99`) on a scoped/internal-sounding name is a dependency-confusion flag; a malicious payload can live in runtime code or a browser asset (not just install scripts) and exfiltrate over DNS — so vetting is behavioral, not a one-time install-script review.
+16. A commit-SHA pin only protects you if resolution verifies the checked-out content's hash; treat plugin/marketplace auto-updates as untrusted until the tool confirms the resolved content matches the pin.
 
 ## Rule 1 — Verify before install: slopsquatting is an active attack
 
@@ -261,6 +263,42 @@ Tag managers are production code deployed by whoever holds the container login: 
 Checklist for anything an agent introduces — runtime, **codegen, or CI/workflow tooling alike** (the malicious `openai-pr-reviewer` was a fake PR-review bot; compromised OpenAPI codegens ran credential stealers): verify upstream, pin, and prefer installing an unfamiliar package in a **disposable sandbox** first, since destructive payloads run on import. Provenance and popularity are inputs to the decision, never the decision itself.
 
 **Verify:** CI diffs `package.json`/lockfile changes and fails on a new dependency not on an allowlist or not resolvable to a verified upstream; a scheduled job re-checks installed packages against a malicious-package feed (GitHub Advisories, OSV) — not just `npm audit`, which only knows about filed CVEs.
+
+---
+
+## Rule 15 — Dependency confusion, and payloads that hide from install-time scanning
+
+**Why:** two 2026 escalations broke the assumptions behind "verify the package, then trust it." **Dependency confusion:** malicious packages publish at absurd version numbers (`@nimbusedge/auth` at `19999.x`, `@traktis/*` at `99.99.x`, `test89078-auth` at `99.99.99`) so a resolver misconfigured to check the public registry wins over your internal package of the same name — then a lifecycle script opens a reverse shell or exfiltrates CI/build env vars, sometimes over **DNS** (`test89078-auth`) to slip past HTTP-only egress monitoring. **Install-time scanning isn't enough:** `indexed-btree` (impersonating `sorted-btree`, ~2M weekly downloads) hid its loader inside `BTree.prototype.set()` so it fires at *runtime*, not install; typosquats like `webpackbootstrap5` ship a *browser-loaded* payload with no lifecycle hook at all; and `@railone/image-utils`/`blue-string-formatter-utils` are fetch-and-`eval()` loaders whose payload changes after any one-time review.
+
+```jsonc
+// ❌ WRONG — assume a scoped/internal name + install-script scan is enough
+"dependencies": { "@acme/auth": "^19999.0.1" }   // inflated version shadows your private @acme/auth
+
+// ✅ RIGHT
+//  1. Pin your private scope to your internal registry; never let it fall through to npmjs.
+//     .npmrc:  @acme:registry=https://npm.internal.acme.com
+//  2. An implausible version (19999.x / 99.99.99) or a brand-new package at 10.0.0 is a review stop.
+//  3. Egress-allowlist CI runners and dev machines for BOTH HTTP(S) and DNS destinations.
+//  4. Vet behaviorally, not once: the payload can live in runtime code or a remote fetch-and-eval.
+```
+
+**Verify:** `.npmrc`/`.yarnrc` scopes every internal scope to the internal registry (grep for a bare `@yourscope:` with no `registry=`); CI egress policy covers DNS, not just HTTP; a scheduled job re-checks installed packages against OSV/GitHub Advisories (Rule 14) rather than trusting a one-time review.
+
+## Rule 16 — A commit pin only holds if the resolved content is verified
+
+**Why:** pinning to a commit SHA (Rule 6) is only as strong as how the installer *resolves* it. "Plugin4Shell" (Sept 2026) showed four AI coding-agent plugin marketplaces — Claude Code, Codex, Copilot, Gemini CLI — pinning plugins to a reviewed commit but checking out a **ref** (branch/tag) whose name can be crafted to mimic the pinned hash, so a repo owner could resolve the "pinned" plugin to different, malicious code and a routine background auto-update deployed it zero-click to every installed instance. The pin developers rely on wasn't actually locked.
+
+```yaml
+# ✅ GitHub Actions: SHA pin + verified — Actions resolves the SHA to content, so this holds
+- uses: acme/action@a1b2c3d4...   # full 40-char commit SHA, with a version comment
+# ⚠ Agent/IDE plugin marketplaces: a "pinned" plugin can auto-update to a colliding ref.
+#   Disable background plugin auto-update until the tool confirms it verifies resolved
+#   content against the pinned hash (as of disclosure: Copilot and Gemini CLI unpatched).
+```
+
+Prefer lockfiles and integrity hashes (which verify *content*, not a ref name); for agent plugin ecosystems, turn off silent auto-update on any marketplace not confirmed to verify the pin.
+
+**Verify:** every GitHub Action is SHA-pinned (Rule 6); background auto-update is disabled for coding-agent plugins on tools not confirmed patched against ref-collision resolution.
 
 ---
 

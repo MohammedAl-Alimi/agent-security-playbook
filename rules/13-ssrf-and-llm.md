@@ -193,6 +193,8 @@ const result = op(record);
 
 Rules of thumb: pin every evaluator/codegen to its patched version and re-check the vendor's advisory list after upgrading (Orval shipped one CVE fix, then eight more of the same bug class two days later — one patch ≠ the class closed). Treat the *input to a code generator* (an OpenAPI/JSON schema) as untrusted when it comes from a third party. And never trust a denylist to contain an evaluator exposed to untrusted input — require an allowlist or true isolation. This is the same "output/expression is untrusted" principle as Rules 3–4, applied to evaluators the app runs itself.
 
+One more sandbox footgun: the *sanitizer itself* must not be reachable by the untrusted input it guards. n8n's expression sandbox was escaped (CVE-2026-86076) by declaring a class field named `__sanitize` that rebound the sanitizer reference the compiler resolved through a dynamically-scoped `this` — so the guard was overwritten by the very expression it was meant to sanitize. Wire guards through a closed-over/lexical reference the input can't name or shadow, never through dynamic scope (`this`, a global, a property key) that attacker-controlled field/property names can influence.
+
 **Verify:** grep for evaluator entry points (`jsonata(`, `parse_expr(`, `Handlebars.compile(`, `new Function(`, `eval(`) fed by request- or model-derived strings → each is allowlisted or sandboxed; the evaluator/codegen versions in the lockfile are at or above the latest advisory's fixed version.
 
 ---
