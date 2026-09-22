@@ -16,6 +16,7 @@ The database enforces tenancy itself: RLS on every table from the migration that
 10. Test RLS in CI: `tests.rls_enabled('public')` + per-table pgTAP via `supabase test db`, splinter lints build-breaking.
 11. Soft delete is a security state: every policy/view filters `deleted_at IS NULL`, user deletion revokes sessions in the same operation, uniqueness uses partial indexes, and secrets are hard-deleted — never soft-deleted.
 12. Injection applies beyond SQL: query filters accept schema-validated scalars, never raw request objects — NoSQL operator injection (`{"$gt":""}`) and `$`-prefixed keys die at the boundary.
+13. Parameterization protects *values*, not *identifiers* or *filter strings*: table/schema/column names need allowlists or identifier-quoting, and a string-built PostgREST/REST filter is injectable exactly like a raw `WHERE` clause.
 
 ## Rule 1 — RLS in the same migration as CREATE TABLE
 
@@ -227,6 +228,26 @@ const user = await users.findOne({ email: { $eq: email } });
 The primary defense is [chapter 03](03-input-validation.md)'s strict parsing — `z.string()` rejects `{"$gt":""}` outright. Belt-and-suspenders for Mongo-family stores: strip `$`-prefixed keys and dots from any object that must remain dynamic (`mongo-sanitize`-style), pin values with `$eq`, and never spread parsed-but-open objects (`z.record`, `passthrough`) into a `where`. Prisma/Drizzle: raw-query escape hatches (`$queryRawUnsafe`, `sql.raw`) take no interpolated user input — same bar as Rule 7.
 
 **Verify:** grep for `findOne({`/`find({`/`where:` sites fed by request-derived objects → every value passed is a schema-validated scalar; test login/search endpoints with `{"$gt":""}` and `{"$ne":null}` payloads → 400 from the schema, never a match.
+
+---
+
+## Rule 13 — Identifiers and filter strings: parameterizing values isn't enough
+
+**Why:** Rule 7 kills value injection, but two things a parameter placeholder *can't* carry still get built by string concatenation and get missed. **Identifiers** — table, schema, and column names: n8n's Oracle node dropped attacker-chosen tables because it interpolated the table/schema name into DDL without identifier-quoting, and these fields are easy to wave off as "not user data" when they're actually expression-bound. **Filter strings** — a REST/PostgREST filter built as text is injectable just like a `WHERE` clause: n8n's Supabase node "Filters (String)" mode let untrusted input widen a filter to read/update/delete *every* row in a table. (And a client-supplied `sessionId` fed into a MongoDB memory store without a string check is the [Rule 12](#rule-12--operator-injection-filters-take-scalars-not-request-objects) operator-injection bug in an AI chat backend — validate it's a plain string/UUID first.)
+
+```ts
+// ❌ WRONG — identifier and filter built from (expression-bound) input
+await db.query(`DROP TABLE ${schema}.${table}`);                 // identifier injection → arbitrary DDL
+await supabase.from('rows').select('*').filter(userFilterString); // string filter → full-table read/delete
+
+// ✅ RIGHT — allowlist identifiers; use structured/parameterized filters
+if (!ALLOWED_TABLES.has(table)) throw new Error('unknown table'); // allowlist, or driver identifier-quote
+await supabase.from('rows').select('*').eq('owner_id', user.id).eq('status', status); // structured, not string
+```
+
+Identifiers → allowlist or the driver's identifier-quoting (`pg`'s `format('%I', name)`), never string interpolation. Filters → the client's structured/parameterized filter API (`.eq()`, filter objects), never a concatenated filter string with user- or LLM-supplied text. This applies everywhere a query is assembled, including workflow/automation-platform database nodes.
+
+**Verify:** grep for query/DDL strings interpolating a name field (`${table}`, `${column}`, `${schema}`) → each is allowlisted or identifier-quoted; grep for string-built `.filter(`/PostgREST filter params fed by request or expression data → none; a test injects `*` / an operator into a filter field and asserts it can't widen the result set.
 
 ---
 

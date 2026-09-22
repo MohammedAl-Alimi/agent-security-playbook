@@ -15,6 +15,7 @@ Federated login fails at the seams — linking, redirects, and emailed links —
 9. Store provider tokens AES-GCM-encrypted with minimum scopes; revoke at the provider on disconnect.
 10. Resolve an OAuth/OIDC `sub` to a local account by exact equality only — never a `LIKE`/substring match (ORM JSON helpers degrade to substring on SQLite).
 11. Enforce identical checks on every session-minting path — bind refresh tokens to the originally-consented resource, and apply the same role/policy evaluation to callback, token-exchange, and SSO variants alike.
+12. A signed approval/resume/action URL binds its signature to the full resource context it authorizes (workflow, project, owner) — not just the path/query — and path-traversal is normalized out *before* signing.
 
 ## Rule 1 — Authorization Code + PKCE, CSPRNG state bound to the session
 
@@ -249,4 +250,24 @@ Route the callback, token-exchange, SSO, and refresh flows through the **same** 
 
 ---
 
-Related: [01 — Authentication](01-authentication.md) (session lifecycle, MFA) · [02 — Authorization](02-authorization.md) (the role/policy gate these paths must share) · [06 — Hashing & Tokens](06-hashing-and-tokens.md) (token storage, JWT verification).
+## Rule 12 — Signed approval/resume URLs bind to the resource they authorize
+
+**Why:** "human-in-the-loop" approval gates — the signed link that resumes a paused agent/workflow run — are only as scoped as what their signature covers. n8n's Send-and-Wait approval URL (GHSA-597w-c3jh-g8fg) signed only the path and query string, not the workflow/project/owner it belonged to, and resolved a user-supplied node identifier's path-traversal sequences *before* signing — so any user who could create a workflow could mint a validly-signed approval URL for a gate in a project they shouldn't touch, and it stayed valid across every future run. A signature that doesn't name the resource authorizes more than intended.
+
+```ts
+// ❌ WRONG — sign the path/query only; traversal resolved into the signed value
+const sig = hmac(`${path}?${query}`);                  // not bound to workflow/project/owner
+
+// ✅ RIGHT — sign the full authorization context, normalize identifiers first
+const nodeId = assertNoTraversal(basename(input.nodeId));   // reject ../ BEFORE it's signed
+const sig = hmac(JSON.stringify({ workflowId, projectId, ownerId, nodeId, exp }));
+// on resume: recompute over the same bound context and check exp + that ownerId still owns projectId
+```
+
+Bind the signature to the resource tuple (and an expiry), verify ownership again at resume time (not just signature validity), and normalize/reject `../` in any segment before it enters the signed payload. Same discipline as the single-use, hashed, short-TTL tokens in [Rule 5](#rule-5--magic-links-hashed-single-use-short-ttl-post-consumed) — a valid signature is not the same as an authorized action.
+
+**Verify:** a user creates an approval URL for their own workflow, then a test confirms the same signature is rejected for a different workflow/project/owner; a `../`-laden node identifier is rejected before signing, not resolved into the signed value.
+
+---
+
+Related: [01 — Authentication](01-authentication.md) (session lifecycle, MFA) · [02 — Authorization](02-authorization.md) (the role/policy gate these paths must share, incl. every path to a resource) · [06 — Hashing & Tokens](06-hashing-and-tokens.md) (token storage, JWT verification) · [08 — Webhooks](08-webhooks.md) (verifying provider-signed inbound events).

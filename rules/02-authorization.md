@@ -12,6 +12,7 @@ Knowing *who* is calling ([authentication](01-authentication.md)) says nothing a
 6. Deny by default: no matching policy, thrown error, or missing role → denied, never allowed.
 7. Any diff that widens permissions requires explicit human approval — never a debugging tactic.
 8. Admin surfaces are role-gated at every layer — an unlinked URL, hidden nav item, or obscure path is not protection.
+9. Every path that reaches a resource re-runs the same ownership check — test/preview/dry-run endpoints, internal message buses, and agent/tool-resolution paths are the ones that skip it.
 
 ## Rule 1 — Authentication ≠ authorization
 
@@ -186,3 +187,31 @@ export async function DELETE(req: Request) {
 Layer it: the admin layout checks server-side (UX), every admin route handler/action checks again (the boundary, [ch01](01-authentication.md) Rule 1), admin-only mutations run through `can()` (Rule 3), and admin-only data is denied by RLS to non-admin roles (backstop, [ch04](04-database-rls.md)). Prefer 404 over 403 so the surface's existence isn't confirmed. Third-party admin tools (DB GUIs, queue dashboards, feature-flag consoles) sit behind SSO/deployment protection ([ch25](25-deployment-infrastructure.md)), never on an unauthenticated URL.
 
 **Verify:** the ch15 route-table test includes every `/admin` and `/api/admin` route asserting non-admin → 404/403; grep admin handlers for a `can(`/role check in the handler body → no hits missing.
+
+## Rule 9 — The same ownership check on every path to a resource
+
+**Why:** the primary read/write endpoint usually gets the authorization check; the *secondary* paths to the same resource quietly don't. A single platform (n8n) shipped a cluster of these in one week: a credential-**test** endpoint resolving any caller-supplied project ID, an Inline **Agent** node decrypting a referenced credential without checking ownership, an internal **Redis PubSub** channel installing packages while skipping every check the user-facing install path enforces, and a **revert/undo** control that matched objects by ID while the runtime executed them by name — so a duplicate ID silently bypassed the safeguard. The recurring shape: a "test", "preview", "dry-run", "internal", or "agent" path treats a caller-supplied resource ID as safe to resolve because the *main* path is guarded.
+
+```ts
+// ❌ WRONG — the primary route checks ownership; the "test" route trusts the body's id
+export async function POST(req) {                      // /api/credentials/test
+  const { projectId, credentialId } = await parse(req);
+  const secret = await decrypt(credentialId);          // no ownership check — "it's just a test"
+  return fetch(userUrl, { headers: { authorization: secret } });
+}
+
+// ✅ RIGHT — one authorization gate every path calls, keyed on the caller
+async function loadCredentialFor(user, credentialId) {
+  const cred = await db.credential.findFirst({ where: { id: credentialId, ownerId: user.id } });
+  if (!cred) throw new Forbidden();                    // 404/403 on someone else's resource
+  return decrypt(cred);
+}
+```
+
+Route primary, test, preview, internal-bus, and agent-node access through the **same** `can()`/ownership function ([Rule 3](#rule-3--one-policy-module-a-single-canuser-action-resource-entry-point)); an internal message bus that propagates actions across cluster nodes is an admin-privileged channel, not "trusted infrastructure," and needs its write access locked down accordingly. When two code paths key on different identifiers for the same object (ID vs name), a security control on one is bypassable through the other.
+
+**Verify:** for every resource with a primary + a secondary endpoint (test/preview/export/agent tool), a cross-user test asserts the secondary path denies access to a resource the caller doesn't own; internal PubSub/queue channels that trigger privileged actions have their write access restricted and tested like an admin API.
+
+---
+
+Related: [01 — Authentication](01-authentication.md) (auth in every entry point) · [04 — Database & RLS](04-database-rls.md) (the data-layer backstop) · [21 — Agents, MCP & RAG](21-agent-mcp-rag.md) (agent nodes resolving credentials/tools) · [20 — OAuth & Account Lifecycle](20-oauth-account-lifecycle.md) (consistent checks across session paths).
